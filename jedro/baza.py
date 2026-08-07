@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS meat_versions (
     kept_pages   INTEGER NOT NULL,
     created_at   TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS store_health (
+    store        TEXT PRIMARY KEY,
+    last_ok      TEXT,
+    last_failure TEXT,
+    failures     INTEGER NOT NULL DEFAULT 0,
+    reason       TEXT
+);
 """
 
 
@@ -125,3 +133,31 @@ class Archive:
                       SUM(v.source_pages) AS source_pages, SUM(v.kept_pages) AS kept_pages
                FROM meat_versions v JOIN magazines m ON m.id = v.magazine_id
                GROUP BY m.store ORDER BY m.store""").fetchall()
+
+    def note_store_result(self, store: str, ok: bool, reason: str = "") -> int:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        if ok:
+            self.conn.execute(
+                """INSERT INTO store_health (store, last_ok, failures, reason)
+                   VALUES (?, ?, 0, NULL)
+                   ON CONFLICT(store) DO UPDATE SET
+                       last_ok=excluded.last_ok, failures=0, reason=NULL""",
+                (store, now))
+            self.conn.commit()
+            return 0
+        self.conn.execute(
+            """INSERT INTO store_health (store, last_failure, failures, reason)
+               VALUES (?, ?, 1, ?)
+               ON CONFLICT(store) DO UPDATE SET
+                   last_failure=excluded.last_failure,
+                   failures=store_health.failures + 1,
+                   reason=excluded.reason""",
+            (store, now, reason))
+        self.conn.commit()
+        return self.conn.execute(
+            "SELECT failures FROM store_health WHERE store = ?", (store,)).fetchone()[0]
+
+    def failing_stores(self, threshold: int) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            """SELECT * FROM store_health WHERE failures >= ?
+               ORDER BY failures DESC, store""", (threshold,)).fetchall()

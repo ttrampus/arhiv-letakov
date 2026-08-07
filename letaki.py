@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jedro import nastavitve as nastavitve_modul
-from jedro import izbor, dnevnik, strani, urnik, carovnik
+from jedro import izbor, dnevnik, obvestila, strani, urnik, carovnik
 from jedro.baza import Archive
 from jedro.prenos import fetch_magazine, target_path
 from jedro.povezava import Fetchers
@@ -41,30 +41,48 @@ def cmd_run(args, cfg) -> int:
         try:
             for store in stores:
                 try:
-                    result = process_store(store, fetchers, archive, cfg, args.dry_run)
+                    found, result = process_store(store, fetchers, archive, cfg, args.dry_run)
                     totals = [a + b for a, b in zip(totals, result)]
+                    if found:
+                        archive.note_store_result(store.name, True)
+                    else:
+                        archive.note_store_result(store.name, False, "nič najdenega")
+                        broken.append(store.name)
                 except Exception as exc:
                     log.error("%s: zajem ni uspel: %s", store.name, exc)
                     log.debug("sled napake", exc_info=True)
+                    archive.note_store_result(store.name, False, str(exc)[:200])
                     broken.append(store.name)
         finally:
             fetchers.close()
 
-    verb = "bi preneslo" if args.dry_run else "preneseno"
-    log.info("Konec: %s %s, %s preskočenih, %s neuspelih",
-             verb, totals[0], totals[1], totals[2])
-    if broken:
-        log.warning("Trgovine z napako: %s", ", ".join(broken))
-    return 1 if broken and totals[0] == 0 else 0
+        verb = "bi preneslo" if args.dry_run else "preneseno"
+        log.info("Konec: %s %s, %s preskočenih, %s neuspelih",
+                 verb, totals[0], totals[1], totals[2])
+        if broken:
+            log.warning("Trgovine brez rezultata: %s", ", ".join(broken))
+        return _report_failures(archive, cfg)
+
+
+def _report_failures(archive, cfg) -> int:
+    failing = archive.failing_stores(cfg.notify_after)
+    if not failing:
+        return 0
+    text = obvestila.message(failing)
+    for line in text.splitlines()[1:]:
+        log.error(line)
+    obvestila.send(cfg, text)
+    return 1
 
 
 def process_store(store: BaseStore, fetchers, archive, cfg, dry_run: bool):
     log.info("=== %s", store.label)
     magazines = store.find_magazines(fetchers)
+    found = len(magazines)
 
     if not magazines:
         log.warning("%s: nič najdenega (postavitev strani se je morda spremenila)", store.name)
-        return 0, 0, 0
+        return 0, (0, 0, 0)
 
     if cfg.only_food:
         magazines = [m for m in magazines if _is_food(m, cfg)]
@@ -110,7 +128,7 @@ def process_store(store: BaseStore, fetchers, archive, cfg, dry_run: bool):
             path.unlink(missing_ok=True)
             skipped += 1
 
-    return downloaded, skipped, failed
+    return found, (downloaded, skipped, failed)
 
 
 def _is_food(magazine: Magazine, cfg) -> bool:
@@ -203,6 +221,7 @@ def cmd_home(cfg) -> int:
 
     with Archive(cfg.db_path) as archive:
         rows = archive.summary()
+        failing = archive.failing_stores(cfg.notify_after)
     if rows:
         total = sum(row["count"] for row in rows)
         latest = max(row["latest"] for row in rows)[:10]
@@ -216,6 +235,10 @@ def cmd_home(cfg) -> int:
         print(f"  Časovnik  teče, zagon {cfg.schedule}")
     else:
         print("  Časovnik  ni nameščen, poženi ./letaki urnik namesti")
+
+    for row in failing:
+        print(f"  Težava    {row['store']}: {row['failures']} zagonov zapored"
+              f" brez rezultata ({row['reason'] or 'neznano'})")
 
     print()
     print(HELP.format(config_path=cfg.config_path))

@@ -86,6 +86,26 @@ Brez systemd:
 
 Izpis gre na zaslon in v `dnevniki/arhiv-letakov.log` (5 × 2 MB).
 
+### Ko zajem neha delati
+
+Spletne strani se spreminjajo in trgovina lahko tiho neha vračati kataloge.
+Vsak zagon si zapiše, ali je trgovina kaj našla. Ko jih toliko zapored ne najde
+nič, program vrne izhodno kodo 1, kar systemd šteje za neuspeh, in pošlje
+sporočilo:
+
+```yaml
+obvescanje:
+  po_neuspehih: 3
+  webhook: https://hooks.slack.com/services/...
+  ukaz: mail -s "arhiv-letakov" jaz@podjetje.si
+```
+
+`webhook` pošlje `{"text": ...}`, kar razumeta Slack in Discord; `ukaz` dobi
+sporočilo na standardni vhod. Nastaviš lahko oboje ali nobenega. Prvi uspešni
+zajem števec ponastavi, stanje pa vidiš tudi v izpisu golega `./letaki`.
+
+Če hočeš ob neuspehu obvestilo prek systemd, dodaj enoti `OnFailure=`.
+
 Prostor: en teden vseh sedmih trgovin je okoli 170 MB, mesne kopije še kakih 40 %
 tega, torej računaj z 9-10 GB na leto. Arhiv se sam ne obrezuje.
 
@@ -129,6 +149,16 @@ sqlite3 arhiv.db "SELECT m.store, m.title, v.source_pages, v.kept_pages
 ```
 
 Po dodajanju besede v `STEMS` poženi `./letaki meso --znova`.
+
+## Testi
+
+```bash
+venv/bin/python -m unittest discover -s testi -t .
+```
+
+Pokrivajo branje datumov, izbor živilskih letakov, mesno besedišče, pretvorbo
+urnika v `OnCalendar`, kazalo in obveščanje. Ne gredo na splet, zato tečejo v
+desetinki sekunde in v GitHub Actions ob vsakem pushu.
 
 ## Zgradba
 

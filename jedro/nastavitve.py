@@ -38,6 +38,9 @@ class Config:
     allow_keywords: list[str] = field(default_factory=list)
     meat_enabled: bool = True
     meat_ocr: bool = True
+    notify_after: int = 3
+    notify_webhook: str = ""
+    notify_command: str = ""
 
     def store_enabled(self, name: str) -> bool:
         return self.stores.get(name, True)
@@ -59,6 +62,7 @@ def load(path: Path | str | None = None) -> Config:
     brskalnik = raw.get("brskalnik") or {}
     hrana = raw.get("izbor") or {}
     meso = raw.get("mesne_strani") or {}
+    obvestila = raw.get("obvescanje") or {}
 
     return Config(
         root=root,
@@ -83,4 +87,7 @@ def load(path: Path | str | None = None) -> Config:
         allow_keywords=list(hrana.get("sprejmi_besede") or izbor.DEFAULT_ALLOW),
         meat_enabled=bool(meso.get("vklopljeno", True)),
         meat_ocr=bool(meso.get("ocr", True)),
+        notify_after=int(obvestila.get("po_neuspehih", 3)),
+        notify_webhook=str(obvestila.get("webhook") or ""),
+        notify_command=str(obvestila.get("ukaz") or ""),
     )

@@ -174,6 +174,13 @@ izbor:
   # zavrni_besede: [šola, zlatarna, ferdo, vinski]
   # sprejmi_besede: [redni katalog, akcijski katalog, letak]
 
+# Sporoči, ko trgovina toliko zagonov zapored ne najde ničesar.
+# webhook sprejme Slack ali Discord, ukaz dobi sporočilo na standardni vhod.
+obvescanje:
+  po_neuspehih: 3
+  webhook: ""
+  ukaz: ""
+
 mesne_strani:
   vklopljeno: {str(answers["meat"]).lower()}
   mapa: arhiv-meso
