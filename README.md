@@ -56,6 +56,7 @@ virtualnega okolja.
 ```bash
 ./letaki urnik namesti
 ./letaki urnik
+./letaki urnik odstrani
 ```
 
 Zapiše uporabniško enoto systemd (`~/.config/systemd/user/arhiv-letakov.timer`),
@@ -84,6 +85,9 @@ Brez systemd:
 ```
 
 Izpis gre na zaslon in v `dnevniki/arhiv-letakov.log` (5 × 2 MB).
+
+Prostor: en teden vseh sedmih trgovin je okoli 170 MB, mesne kopije še kakih 40 %
+tega, torej računaj z 9-10 GB na leto. Arhiv se sam ne obrezuje.
 
 ## Kaj se zbira
 
