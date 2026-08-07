@@ -1,0 +1,46 @@
+mapa_arhiva: arhiv
+baza: arhiv.db
+mapa_dnevnikov: dnevniki
+
+# dnevno HH:MM | tedensko HH:MM | pon,cet 06:15 | ročno
+urnik: dnevno 06:00
+
+omrezje:
+  cas_zahteve: 60
+  cas_prenosa: 300
+  premor_med_zahtevami: 2.0
+  poskusi: 3
+  user_agent: >-
+    Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
+    Chrome/126.0.0.0 Safari/537.36
+
+brskalnik:
+  brez_okna: true
+  cas_ms: 60000
+
+izbor:
+  samo_zivila: true
+  najvec_dni_veljavnosti: 21
+  # zavrni_besede: [šola, zlatarna, ferdo, vinski]
+  # sprejmi_besede: [redni katalog, akcijski katalog, letak]
+
+mesne_strani:
+  vklopljeno: true
+  mapa: arhiv-meso
+  ocr: true
+
+trgovine:
+  mercator:
+    vklopljeno: true
+  tus:
+    vklopljeno: true
+  spar:
+    vklopljeno: true
+  leclerc:
+    vklopljeno: true
+  lidl:
+    vklopljeno: true
+  hofer:
+    vklopljeno: true
+  eurospin:
+    vklopljeno: true

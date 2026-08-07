@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Ovoj, da lahko poženeš ./letaki brez vklapljanja virtualnega okolja.
+set -e
+cd "$(dirname "$0")"
+
+if [ ! -x venv/bin/python ]; then
+    echo "Še ni nastavljeno, to naredim najprej."
+    exec ./namesti.sh
+fi
+
+exec venv/bin/python letaki.py "$@"

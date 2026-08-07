@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+
+nastavitve.yaml
+nastavitve.yaml.bak
+arhiv/
+arhiv-meso/
+arhiv.db
+dnevniki/

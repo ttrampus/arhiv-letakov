@@ -1,0 +1,18 @@
+requests>=2.31
+beautifulsoup4>=4.12
+PyYAML>=6.0
+
+# Neobvezno: hitrejši in prizanesljivejši razčlenjevalnik HTML. Kadar ga ni
+# (npr. ni paketa za tvoj Python), zajemalniki uporabijo html.parser iz Pythona.
+lxml>=5.0; python_version < "3.14"
+
+# Letake, ki so same slike (Lidl), sešijemo v PDF.
+img2pdf>=0.5
+Pillow>=10.0
+
+# Branje in pisanje arhiviranih PDF za kopije samo z mesnimi stranmi.
+pypdf>=4.0
+
+# Potrebujeta ga samo trgovini, ki tečeta skozi brskalnik (hofer, eurospin).
+# Po namestitvi prenesi še brskalnik:  playwright install chromium
+playwright>=1.40
