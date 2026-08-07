@@ -9,7 +9,7 @@ Trgovine: Mercator, Tuš, Spar/Interspar, E.Leclerc, Lidl, Hofer, Eurospin.
 ## Namestitev
 
 ```bash
-git clone <naslov-repozitorija> arhiv-letakov
+git clone https://github.com/ttrampus/arhiv-letakov.git
 cd arhiv-letakov
 ./namesti.sh
 ```
@@ -80,7 +80,7 @@ trgovine pa ne izdajajo vse istega dne.
 Brez systemd:
 
 ```cron
-0 6 * * * /pot/do/arhiv-letakov/letaki prenesi >> /pot/do/arhiv-letakov/dnevniki/cron.log 2>&1
+0 6 * * * $HOME/arhiv-letakov/letaki prenesi >> $HOME/arhiv-letakov/dnevniki/cron.log 2>&1
 ```
 
 Izpis gre na zaslon in v `dnevniki/arhiv-letakov.log` (5 × 2 MB).
@@ -153,19 +153,21 @@ Kako pridemo do posamezne trgovine:
 
 ### Nova trgovina
 
-Prepiši `trgovine/_predloga.py` v `trgovine/<ime>.py`, napiši `find_magazines`,
-razred vpiši v `trgovine/__init__.py` in trgovino dodaj v `nastavitve.yaml`.
-Uporabi `fetchers.http`, kjer gre, in `fetchers.browser` samo, kadar navaden
-HTTP odpove. Če trgovina objavi slike namesto PDF, namesto `file_url` nastavi
+Recimo, da dodajaš Jager. Prepiši `trgovine/_predloga.py` v
+`trgovine/jager.py`, razred preimenuj v `JagerStore` in mu nastavi
+`name = "jager"`, napiši `find_magazines`, razred vpiši v
+`trgovine/__init__.py` in trgovino dodaj v `nastavitve.yaml`. Uporabi
+`fetchers.http`, kjer gre, in `fetchers.browser` samo, kadar navaden HTTP
+odpove. Če trgovina objavi slike namesto PDF, namesto `file_url` nastavi
 `image_urls` in prenos jih sešije. Preveri z:
 
 ```bash
-./letaki prenesi --trgovina <ime> --poskusno
+./letaki prenesi --trgovina jager --poskusno
 ```
 
 Ko trgovina neha kaj najti, zagon izpiše `nič najdenega (postavitev strani se je
-morda spremenila)`. Popraviš izbirnik v `trgovine/<ime>.py` ali trgovino do
-takrat izklopiš z `vklopljeno: false`.
+morda spremenila)`. Popraviš izbirnik v datoteki te trgovine ali jo do takrat
+izklopiš z `vklopljeno: false`.
 
 ## Vljudnost
 
