@@ -6,9 +6,13 @@ jobs:
   testi:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: prevzem kode
+        uses: actions/checkout@v4
+      - name: python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: python -m unittest discover -s testi -t . -v
+      - name: odvisnosti
+        run: pip install -r requirements.txt
+      - name: testi
+        run: python -m unittest discover -s testi -t . -v
