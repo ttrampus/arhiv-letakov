@@ -207,3 +207,8 @@ izklopiš z `vklopljeno: false`.
 
 Ena zahteva na dve sekundi, ponovni poskusi z zamikom, en kratek zagon na dan in
 nobenega brskanja zunaj strani z letaki.
+
+## Licenca
+
+MIT, glej `LICENSE`. Licenca velja za kodo. Preneseni katalogi so avtorsko delo
+trgovin in ta licenca zanje ne velja.
