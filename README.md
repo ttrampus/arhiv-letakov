@@ -53,6 +53,11 @@ virtualnega okolja.
 
 ## Na strežniku
 
+Spodnje velja za računalnik, na katerem imaš svoj uporabniški račun. Za
+namestitev v podjetju — sistemski uporabnik, koda v `/opt`, nastavitve v
+`/etc`, Docker ali Kubernetes — glej **[NAMESTITEV-STREZNIK.md](NAMESTITEV-STREZNIK.md)**
+in `sudo ./namesti-streznik.sh`.
+
 ```bash
 ./letaki urnik namesti
 ./letaki urnik
@@ -99,6 +104,9 @@ obvescanje:
   webhook: https://hooks.slack.com/services/...
   ukaz: mail -s "arhiv-letakov" jaz@podjetje.si
 ```
+
+Za nadzorni sistem je tu `./letaki stanje` (in `--json`): izhodna koda 0 pomeni
+v redu, 1 pomeni, da zajem ne dela.
 
 `webhook` pošlje `{"text": ...}`, kar razumeta Slack in Discord; `ukaz` dobi
 sporočilo na standardni vhod. Nastaviš lahko oboje ali nobenega. Prvi uspešni
