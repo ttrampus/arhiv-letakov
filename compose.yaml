@@ -1,0 +1,28 @@
+# En zajem na klic: docker compose run --rm letaki
+# Ponavljanje prevzame gostitelj (streznik/docker-arhiv-letakov.timer) ali
+# Kubernetes (streznik/kubernetes-cronjob.yaml).
+services:
+  letaki:
+    build: .
+    image: arhiv-letakov:latest
+    # Ne dviguj ga z "compose up": zajem je enkraten opravek, ne storitev.
+    profiles: ["opravilo"]
+    environment:
+      TZ: Europe/Ljubljana
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+    volumes:
+      - ./streznik/nastavitve.zabojnik.yaml:/etc/arhiv-letakov/nastavitve.yaml:ro
+      - arhiv:/var/lib/arhiv-letakov
+      - dnevniki:/var/log/arhiv-letakov
+    # Chromium rad prebije privzetih 64 MB /dev/shm.
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  arhiv:
+  dnevniki:

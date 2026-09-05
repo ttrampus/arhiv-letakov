@@ -1,0 +1,44 @@
+# Nastavitve za zagon v zabojniku: poti kažejo v priklopljena nosilca,
+# vse drugo je enako kot v nastavitve.primer.yaml.
+mapa_arhiva: /var/lib/arhiv-letakov/arhiv
+baza: /var/lib/arhiv-letakov/arhiv.db
+mapa_dnevnikov: /var/log/arhiv-letakov
+
+# Urnik tu ni v rabi: zajem ponavlja zunanji časovnik, ne program.
+urnik: ročno
+
+omrezje:
+  cas_zahteve: 60
+  cas_prenosa: 300
+  premor_med_zahtevami: 2.0
+  poskusi: 3
+  # posrednik: http://proxy.podjetje.si:3128   # sicer se vzame HTTPS_PROXY
+
+brskalnik:
+  brez_okna: true
+  cas_ms: 60000
+  # V zabojniku Chromium svojega peskovnika ne more postaviti.
+  brez_peskovnika: true
+
+izbor:
+  samo_zivila: true
+  najvec_dni_veljavnosti: 21
+
+obvescanje:
+  po_neuspehih: 3
+  webhook: ""
+  ukaz: ""
+
+mesne_strani:
+  vklopljeno: true
+  mapa: /var/lib/arhiv-letakov/arhiv-meso
+  ocr: true
+
+trgovine:
+  mercator: {vklopljeno: true}
+  tus: {vklopljeno: true}
+  spar: {vklopljeno: true}
+  leclerc: {vklopljeno: true}
+  lidl: {vklopljeno: true}
+  hofer: {vklopljeno: true}
+  eurospin: {vklopljeno: true}

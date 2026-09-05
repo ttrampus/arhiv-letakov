@@ -1,0 +1,72 @@
+# Tedenski zajem v Kubernetesu. Nastavitve so v ConfigMap, arhiv na trajnem
+# nosilcu (ReadWriteOnce zadošča, ker teče en zajem naenkrat).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arhiv-letakov
+spec:
+  # Četrtek ob 6:00; ura je v UTC, razen če ima gruča spodnji timeZone.
+  schedule: "0 6 * * 4"
+  timeZone: Europe/Ljubljana
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 10001
+            runAsNonRoot: true
+            fsGroup: 10001
+          containers:
+            - name: letaki
+              image: arhiv-letakov:latest
+              args: ["prenesi"]
+              env:
+                - name: TZ
+                  value: Europe/Ljubljana
+              resources:
+                requests: {cpu: "500m", memory: 1Gi}
+                limits: {cpu: "2", memory: 3Gi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: nastavitve, mountPath: /etc/arhiv-letakov, readOnly: true}
+                - {name: arhiv, mountPath: /var/lib/arhiv-letakov}
+                - {name: dnevniki, mountPath: /var/log/arhiv-letakov}
+                - {name: zacasno, mountPath: /tmp}
+                # Chromium potrebuje večji /dev/shm od privzetih 64 MB.
+                - {name: shm, mountPath: /dev/shm}
+          volumes:
+            - name: nastavitve
+              configMap: {name: arhiv-letakov-nastavitve}
+            - name: arhiv
+              persistentVolumeClaim: {claimName: arhiv-letakov}
+            - name: dnevniki
+              emptyDir: {}
+            - name: zacasno
+              emptyDir: {}
+            - name: shm
+              emptyDir: {medium: Memory, sizeLimit: 1Gi}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arhiv-letakov
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      # Katalog je povprečno 21 MB; sedem trgovin nanese 10-15 GB na leto.
+      storage: 100Gi
+---
+# ConfigMap naredi iz pripravljenih nastavitev:
+#   kubectl create configmap arhiv-letakov-nastavitve \
+#       --from-file=nastavitve.yaml=streznik/nastavitve.zabojnik.yaml

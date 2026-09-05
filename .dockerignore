@@ -1,0 +1,16 @@
+venv/
+arhiv/
+arhiv-meso/
+dnevniki/
+brskalniki/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.lock
+nastavitve.yaml
+nastavitve.yaml.bak
+.git/
+.github/

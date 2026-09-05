@@ -1,0 +1,16 @@
+# Zajem v zabojniku, ki ga po urniku sproža docker-arhiv-letakov.timer.
+# Kopiraj obe datoteki v /etc/systemd/system/ in popravi WorkingDirectory.
+[Unit]
+Description=Prenos slovenskih trgovinskih letakov (docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/arhiv-letakov
+ExecStart=/usr/bin/docker compose run --rm letaki prenesi
+TimeoutStartSec=7200
+
+[Install]
+WantedBy=multi-user.target

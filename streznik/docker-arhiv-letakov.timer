@@ -1,0 +1,10 @@
+[Unit]
+Description=Tedenski zajem trgovinskih letakov (docker)
+
+[Timer]
+OnCalendar=Thu 06:00:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

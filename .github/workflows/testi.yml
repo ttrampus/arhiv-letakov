@@ -16,3 +16,16 @@ jobs:
         run: pip install -r requirements.txt
       - name: testi
         run: python -m unittest discover -s testi -t . -v
+
+  zabojnik:
+    runs-on: ubuntu-latest
+    steps:
+      - name: prevzem kode
+        uses: actions/checkout@v4
+      - name: zgradi sliko
+        run: docker build -t arhiv-letakov:test .
+      - name: slika se zažene
+        run: |
+          docker run --rm \
+            -v "$PWD/streznik/nastavitve.zabojnik.yaml:/etc/arhiv-letakov/nastavitve.yaml:ro" \
+            arhiv-letakov:test stanje
