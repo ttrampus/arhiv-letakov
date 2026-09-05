@@ -7,4 +7,8 @@ nastavitve.yaml.bak
 arhiv/
 arhiv-meso/
 arhiv.db
+arhiv.db-wal
+arhiv.db-shm
+arhiv.db.lock
 dnevniki/
+brskalniki/

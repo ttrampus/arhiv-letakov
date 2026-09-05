@@ -70,8 +70,16 @@ class BrowserFetcher:
                                "pip install playwright && playwright install chromium") from exc
 
         log.info("Zaganjam Chromium brez okna")
+        # V zabojniku in pod utrjeno enoto Chromium ne more postaviti peskovnika.
+        args = (["--no-sandbox", "--disable-dev-shm-usage"]
+                if self.config.browser_no_sandbox else [])
+        # requests posrednika iz okolja vzame sam, Chromium ga rabi izrecno.
+        proxy = {"server": self.config.proxy} if self.config.proxy else None
+        if proxy:
+            log.info("Chromium teče skozi posrednika %s", self.config.proxy)
         self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(headless=self.config.browser_headless)
+        self._browser = self._playwright.chromium.launch(
+            headless=self.config.browser_headless, args=args, proxy=proxy)
         self._context = self._browser.new_context(
             user_agent=self.config.user_agent,
             locale="sl-SI",

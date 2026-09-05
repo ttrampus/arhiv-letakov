@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +32,8 @@ class Config:
     user_agent: str = CHROME_UA
     browser_headless: bool = True
     browser_timeout: int = 60_000
+    browser_no_sandbox: bool = False
+    proxy: str = ""
     stores: dict[str, bool] = field(default_factory=dict)
     only_food: bool = True
     max_validity_days: int = 21
@@ -45,9 +48,14 @@ class Config:
     def store_enabled(self, name: str) -> bool:
         return self.stores.get(name, True)
 
+    @property
+    def lock_path(self) -> Path:
+        return self.db_path.with_name(self.db_path.name + ".lock")
+
 
 def load(path: Path | str | None = None) -> Config:
     default = Path(__file__).resolve().parent.parent / "nastavitve.yaml"
+    path = path or os.environ.get("ARHIV_NASTAVITVE")
     config_path = (Path(path) if path else default).expanduser().resolve()
     root = config_path.parent
     raw = {}
@@ -79,6 +87,10 @@ def load(path: Path | str | None = None) -> Config:
         user_agent=omrezje.get("user_agent") or CHROME_UA,
         browser_headless=bool(brskalnik.get("brez_okna", True)),
         browser_timeout=int(brskalnik.get("cas_ms", 60_000)),
+        browser_no_sandbox=bool(brskalnik.get(
+            "brez_peskovnika", os.environ.get("ARHIV_BREZ_PESKOVNIKA") == "1")),
+        proxy=str(omrezje.get("posrednik") or os.environ.get("HTTPS_PROXY")
+                  or os.environ.get("https_proxy") or ""),
         stores={name: bool((s or {}).get("vklopljeno", True))
                 for name, s in (raw.get("trgovine") or {}).items()},
         only_food=bool(hrana.get("samo_zivila", True)),

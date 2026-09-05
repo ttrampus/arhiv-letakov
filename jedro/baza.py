@@ -44,8 +44,12 @@ CREATE TABLE IF NOT EXISTS store_health (
 class Archive:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(path)
+        self.conn = sqlite3.connect(path, timeout=30)
         self.conn.row_factory = sqlite3.Row
+        # WAL prenese branje med pisanjem, busy_timeout pa počaka namesto
+        # takojšnjega "database is locked".
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=30000")
         self.conn.executescript(SCHEMA)
         self.conn.commit()
 

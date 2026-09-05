@@ -1,5 +1,7 @@
+import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from jedro import nastavitve
@@ -32,6 +34,30 @@ class Branje(unittest.TestCase):
     def test_absolutna_pot_ostane(self):
         cfg = self.nalozi("mapa_arhiva: /srv/letaki\n")
         self.assertEqual(cfg.archive_dir, Path("/srv/letaki"))
+
+    def test_posrednik_iz_nastavitev(self):
+        cfg = self.nalozi("omrezje:\n  posrednik: http://proxy.podjetje.si:3128\n")
+        self.assertEqual(cfg.proxy, "http://proxy.podjetje.si:3128")
+
+    def test_posrednik_iz_okolja(self):
+        with unittest.mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://p:3128"}):
+            self.assertEqual(self.nalozi("").proxy, "http://p:3128")
+
+    def test_nastavitve_prevladajo_nad_okoljem(self):
+        with unittest.mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://okolje:3128"}):
+            cfg = self.nalozi("omrezje:\n  posrednik: http://iz-datoteke:3128\n")
+        self.assertEqual(cfg.proxy, "http://iz-datoteke:3128")
+
+    def test_peskovnik_privzeto_vklopljen(self):
+        self.assertFalse(self.nalozi("").browser_no_sandbox)
+
+    def test_peskovnik_izklopi_okolje(self):
+        with unittest.mock.patch.dict(os.environ, {"ARHIV_BREZ_PESKOVNIKA": "1"}):
+            self.assertTrue(self.nalozi("").browser_no_sandbox)
+
+    def test_zaklep_ob_bazi(self):
+        cfg = self.nalozi("baza: /srv/letaki/arhiv.db\n")
+        self.assertEqual(cfg.lock_path, Path("/srv/letaki/arhiv.db.lock"))
 
     def test_trgovine(self):
         cfg = self.nalozi("trgovine:\n  spar:\n    vklopljeno: false\n")

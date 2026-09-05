@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from datetime import date
@@ -11,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jedro import nastavitve as nastavitve_modul
-from jedro import izbor, dnevnik, obvestila, strani, urnik, carovnik
+from jedro import izbor, dnevnik, obvestila, strani, urnik, carovnik, zaklep
 from jedro.baza import Archive
 from jedro.prenos import fetch_magazine, target_path
 from jedro.povezava import Fetchers
@@ -28,6 +29,15 @@ def cmd_run(args, cfg) -> int:
     if args.no_meat:
         cfg.meat_enabled = False
 
+    try:
+        with zaklep.Zaklep(cfg.lock_path):
+            return _run(args, cfg)
+    except zaklep.Zaseden as exc:
+        log.warning("%s", exc)
+        return 0
+
+
+def _run(args, cfg) -> int:
     with Archive(cfg.db_path) as archive:
         stores = [s for s in get_stores(args.stores)
                   if args.stores or cfg.store_enabled(s.name)]
@@ -206,6 +216,7 @@ Ukazi
         --znova             naredi jih na novo, npr. po urejanju jedro/meso.py
   ./letaki pregled          datoteke v arhivu, ki jih izbor danes ne bi zbral
         --izbrisi           in jih izbriše
+  ./letaki stanje           kratko poročilo za nadzor, --json za stroje
   ./letaki urnik            ali časovnik teče in kdaj je naslednji zagon
         namesti / odstrani  vklopi ali izklopi ga
   ./letaki nastavitev       znova odgovori na vprašanja, prepiše nastavitve.yaml
@@ -232,7 +243,7 @@ def cmd_home(cfg) -> int:
         print("  Arhiv     zaenkrat prazen, napolni ga ./letaki prenesi")
 
     if urnik.installed():
-        print(f"  Časovnik  teče, zagon {cfg.schedule}")
+        print(f"  Časovnik  teče ({urnik.scope()}), zagon {cfg.schedule}")
     else:
         print("  Časovnik  ni nameščen, poženi ./letaki urnik namesti")
 
@@ -318,6 +329,42 @@ def cmd_schedule(args, cfg) -> int:
     return 0
 
 
+def cmd_status(args, cfg) -> int:
+    """Kratko poročilo za nadzorni sistem: 0 = v redu, 1 = zajem ne dela."""
+    with Archive(cfg.db_path) as archive:
+        rows = [dict(r) for r in archive.summary()]
+        failing = [dict(r) for r in archive.failing_stores(cfg.notify_after)]
+
+    report = {
+        "nastavitve": str(cfg.config_path),
+        "arhiv": str(cfg.archive_dir),
+        "katalogov": sum(r["count"] for r in rows),
+        "zadnji_prenos": max((r["latest"] for r in rows), default=None),
+        "casovnik": urnik.installed(),
+        "urnik": cfg.schedule,
+        "trgovine": {r["store"]: {"katalogov": r["count"], "zadnji": r["latest"]}
+                     for r in rows},
+        "pokvarjene": {r["store"]: {"zaporednih_neuspehov": r["failures"],
+                                    "razlog": r["reason"],
+                                    "zadnji_uspeh": r["last_ok"]}
+                       for r in failing},
+        "v_redu": not failing,
+    }
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(f"katalogov: {report['katalogov']}")
+        print(f"zadnji prenos: {report['zadnji_prenos'] or 'nikoli'}")
+        print(f"časovnik: {'teče' if report['casovnik'] else 'ni nameščen'}"
+              f" ({cfg.schedule})")
+        for store, info in report["pokvarjene"].items():
+            print(f"pokvarjeno: {store} po {info['zaporednih_neuspehov']} zagonih"
+                  f" ({info['razlog'] or 'neznano'})")
+        print("stanje: v redu" if report["v_redu"] else "stanje: zajem ne dela")
+    return 0 if report["v_redu"] else 1
+
+
 def _date(value: str | None):
     try:
         return date.fromisoformat(value) if value else None
@@ -380,6 +427,10 @@ def main() -> int:
     audit.add_argument("--izbrisi", dest="purge", action="store_true", help="izbriši jih")
     audit.set_defaults(func=cmd_audit)
 
+    status = podukaz("stanje", "kratko poročilo za nadzor (exit 1, kadar zajem ne dela)")
+    status.add_argument("--json", action="store_true", help="izpiši kot JSON")
+    status.set_defaults(func=cmd_status)
+
     sched = podukaz("urnik", "namesti ali odstrani samodejni časovnik")
     sched.add_argument("action", nargs="?", default="stanje",
                        choices=["namesti", "odstrani", "stanje"])
@@ -400,9 +451,17 @@ def main() -> int:
 
     cfg = nastavitve_modul.load(config_path)
 
-    if not cfg.config_path.exists() and args.command != "nastavitev" and sys.stdin.isatty():
-        carovnik.run(cfg.config_path, get_stores(), reconfigure=False)
-        cfg = nastavitve_modul.load(config_path)
+    if not cfg.config_path.exists() and args.command != "nastavitev":
+        if sys.stdin.isatty():
+            carovnik.run(cfg.config_path, get_stores(), reconfigure=False)
+            cfg = nastavitve_modul.load(config_path)
+        else:
+            # Brez terminala ne ugibamo: privzetki bi arhiv zlili v mapo s kodo.
+            print(f"Nastavitev ni: {cfg.config_path}\n"
+                  f"Naredi jo s './letaki nastavitev' ali prekopiraj "
+                  f"nastavitve.primer.yaml in jo pokaži z --nastavitve.",
+                  file=sys.stderr)
+            return 2
 
     dnevnik.setup(cfg.log_dir, verbose)
     if args.command is None:
