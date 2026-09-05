@@ -1,0 +1,15 @@
+# Predloga; @ONCALENDAR@ in @URNIK@ napiše namesti-streznik.sh iz nastavitev.
+[Unit]
+Description=Arhiv slovenskih trgovinskih letakov (@URNIK@)
+
+[Timer]
+@ONCALENDAR@
+
+# Če je bil strežnik ob uri ugasnjen, zajem nadoknadi ob prižigu.
+Persistent=true
+
+# Naključnih 15 minut, da vsi strežniki ne obiščejo trgovin ob isti sekundi.
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

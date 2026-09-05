@@ -1,0 +1,39 @@
+# Predloga; @MAPA@ in @UPORABNIK@ nadomesti namesti-streznik.sh.
+[Unit]
+Description=Prenos slovenskih trgovinskih letakov
+Documentation=https://github.com/ttrampus/arhiv-letakov
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=2h
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=@UPORABNIK@
+Group=@UPORABNIK@
+WorkingDirectory=@MAPA@
+Environment=PLAYWRIGHT_BROWSERS_PATH=@MAPA@/brskalniki
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@MAPA@/venv/bin/python @MAPA@/letaki.py --nastavitve /etc/arhiv-letakov/nastavitve.yaml prenesi
+
+# Chromium in OCR sta počasna.
+TimeoutStartSec=7200
+
+# Ob napaki poskusi še dvakrat, preden odneha do naslednjega zagona.
+Restart=on-failure
+RestartSec=15min
+
+# Program samo bere splet in piše v svoj arhiv, zato mu drugega ne pustimo.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+ReadWritePaths=/var/lib/arhiv-letakov /var/log/arhiv-letakov
+
+[Install]
+WantedBy=multi-user.target
