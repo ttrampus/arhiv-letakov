@@ -1,6 +1,15 @@
 name: testi
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  # Tedenski E2E proti pravim trgovinam: prvi opozori, ko katera prenovi stran.
+  schedule:
+    - cron: "0 5 * * 4"
+
+permissions:
+  contents: read
 
 jobs:
   testi:
@@ -13,9 +22,165 @@ jobs:
         with:
           python-version: "3.12"
       - name: odvisnosti
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest pip-audit bandit
       - name: testi
-        run: python -m unittest discover -s testi -t . -v
+        run: python -m pytest testi -q
+      - name: znane ranljivosti odvisnosti
+        run: |
+          pip-audit -r requirements.txt
+          pip-audit -r requirements-gradnja.txt --require-hashes --disable-pip
+      - name: statična varnostna analiza
+        run: bandit -q -r jedro trgovine letaki.py -ll
+      - name: testi namestitvene skripte (Pester)
+        shell: pwsh
+        env:
+          ARHIV_PYTHON: python
+        run: |
+          Install-Module Pester -RequiredVersion 5.6.1 -Force -SkipPublisherCheck -Scope CurrentUser
+          Import-Module Pester -RequiredVersion 5.6.1
+          $c = New-PesterConfiguration
+          $c.Run.Path = "testi/namesti-windows.Tests.ps1"
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = "Detailed"
+          Invoke-Pester -Configuration $c
+
+  # Ciljno okolje: Windows strežnik. Tu tečejo testi na Windows (zaklep z
+  # msvcrt, poti, cmd.exe), gradnja iz zaklenjenih odvisnosti, preizkus
+  # zgrajenega programa in razčlenjevanje skript v Windows PowerShell 5.1.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: prevzem kode
+        uses: actions/checkout@v4
+      - name: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: odvisnosti (zaklenjene, s kontrolnimi vsotami)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes --no-deps -r requirements-gradnja.txt
+      - name: testi
+        run: python -m pytest testi -q
+      - name: gradnja
+        run: python -m PyInstaller --clean --noconfirm arhiv-letakov.spec
+      - name: zgrajeni program
+        shell: pwsh
+        run: |
+          $exe = "dist\arhiv-letakov\arhiv-letakov.exe"
+          $cfg = Join-Path $env:RUNNER_TEMP "nastavitve.yaml"
+          Copy-Item nastavitve.primer.yaml $cfg
+          & $exe --nastavitve $cfg gostitelji
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $exe --nastavitve $cfg urnik sprozilci
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $exe --nastavitve $cfg prenesi --poskusno --trgovina mercator --trgovina eurospin
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $exe --nastavitve $cfg prenesi --trgovina eurospin
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: testi namestitvene skripte v Windows PowerShell 5.1 (Pester, pravi .exe)
+        shell: powershell
+        env:
+          ARHIV_PYTHON: python
+        run: |
+          $env:ARHIV_IZVOR = (Resolve-Path "dist\arhiv-letakov").Path
+          Install-Module Pester -RequiredVersion 5.6.1 -Force -SkipPublisherCheck -Scope CurrentUser
+          Import-Module Pester -RequiredVersion 5.6.1
+          $c = New-PesterConfiguration
+          $c.Run.Path = "testi/namesti-windows.Tests.ps1"
+          $c.Run.Exit = $true
+          $c.Output.Verbosity = "Detailed"
+          Invoke-Pester -Configuration $c
+      - name: skripte v Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $napake = 0
+          foreach ($f in "namesti-windows.ps1", "zgradi.ps1") {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$tokens, [ref]$errors) | Out-Null
+            foreach ($e in $errors) { Write-Host "${f}:$($e.Extent.StartLineNumber) $($e.Message)"; $napake++ }
+          }
+          if ($napake) { exit 1 }
+      - name: artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: arhiv-letakov-windows
+          path: dist/arhiv-letakov/
+
+  # E2E: celoten program proti pravim trgovinam (16 scenarijev: vseh 7 trgovin,
+  # veljavnost vsakega PDF, ponovni zagon, zaklep, posrednik, požarni zid, okvare).
+  e2e-linux:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: prevzem kode
+        uses: actions/checkout@v4
+      - name: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: tesseract in poppler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-slv poppler-utils
+      - name: odvisnosti
+        run: pip install -r requirements.txt pytest
+      - name: e2e
+        env:
+          ARHIV_E2E: "1"
+        run: python -m pytest testi/e2e -v -rA --basetemp=${{ runner.temp }}/e2e
+      - name: dnevniki e2e
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-linux-dnevniki
+          path: ${{ runner.temp }}/e2e/**/dnevniki/*.log
+
+  # E2E na pravem Windows: namestitev z namesti-windows.ps1, lokalni servisni
+  # račun, prava delnica SMB, opravilo v Task Schedulerju, pravice ACL, napadi.
+  e2e-windows:
+    if: github.event_name != 'pull_request'
+    needs: windows
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: prevzem kode
+        uses: actions/checkout@v4
+      - name: zgrajeni program
+        uses: actions/download-artifact@v4
+        with:
+          name: arhiv-letakov-windows
+          path: dist/arhiv-letakov
+      - name: python (za preverjanje rezultatov)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: namestitev, servisni račun, SMB, Task Scheduler
+        shell: powershell
+        run: .\testi\e2e\windows-streznik.ps1 -Izvor dist\arhiv-letakov
+      - name: e2e scenariji z zgrajenim .exe
+        shell: pwsh
+        env:
+          ARHIV_E2E: "1"
+        run: |
+          python -m pip install --require-hashes --no-deps -r requirements-gradnja.txt
+          $env:ARHIV_PROGRAM = (Resolve-Path "dist\arhiv-letakov\arhiv-letakov.exe").Path
+          python -m pytest testi/e2e -v -rA --basetemp="$env:RUNNER_TEMP\e2e"
+      - name: zberi dnevnike e2e
+        if: failure()
+        shell: pwsh
+        run: |
+          $cilj = Join-Path $env:RUNNER_TEMP "dnevniki"
+          New-Item -ItemType Directory $cilj -Force | Out-Null
+          Copy-Item C:\ProgramData\arhiv-letakov\dnevniki\*.log $cilj -ErrorAction SilentlyContinue
+          Get-ChildItem "$env:RUNNER_TEMP\e2e" -Recurse -Filter *.log -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item $_.FullName (Join-Path $cilj ($_.Directory.Parent.Name + "-" + $_.Name)) }
+      - name: dnevniki e2e
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-windows-dnevniki
+          path: ${{ runner.temp }}/dnevniki
 
   zabojnik:
     runs-on: ubuntu-latest
