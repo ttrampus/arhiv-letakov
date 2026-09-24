@@ -1,0 +1,2 @@
+# Orodja, ki jih potrebuje samo gradnja .exe (poleg requirements.txt).
+pytest>=8
