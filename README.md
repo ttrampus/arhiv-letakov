@@ -2,11 +2,31 @@
 
 Prenaša tedenske kataloge slovenskih živilskih trgovin in jih zlaga v
 `arhiv/<trgovina>/<leto>/`. Ob vsakem letaku shrani še kopijo, ki ima samo
-strani z mesom. Teče lahko sam, iz časovnika systemd.
+strani z mesom. Teče sam, iz Task Schedulerja na Windows ali časovnika systemd.
 
 Trgovine: Mercator, Tuš, Spar/Interspar, E.Leclerc, Lidl, Hofer, Eurospin.
 
-## Namestitev
+## Namestitev na Windows strežnik
+
+Na kratko; podrobnosti, pravice in odpravljanje težav so v
+[NAMESTITEV-STREZNIK.md](NAMESTITEV-STREZNIK.md).
+
+1. Prenesi to skladišče (**Code → Download ZIP**) in ga razpakiraj.
+2. Prenesi zgrajeni program: **Actions → zadnji uspešen zagon na `main` →
+   Artifacts → `arhiv-letakov-windows`** in ga razpakiraj v `dist\arhiv-letakov\`
+   znotraj razpakiranega skladišča. Lahko ga tudi zgradiš sam z `zgradi.ps1`.
+3. V PowerShellu kot skrbnik, v razpakirani mapi:
+   ```powershell
+   Get-ChildItem -Recurse | Unblock-File
+   powershell -ExecutionPolicy Bypass -File .\namesti-windows.ps1 `
+       -Arhiv \\dms01\letaki\arhiv -Racun DOMENA\svc-letaki$ -ZazeniZdaj
+   ```
+
+Pred tem mora skrbnik domene pripraviti servisni račun (gMSA) s pravico
+"Log on as a batch job" in pravico Modify na delnici, požarni zid pa mora
+dovoliti gostitelje, ki jih izpiše `arhiv-letakov.exe gostitelji`.
+
+## Namestitev na Linux
 
 ```bash
 git clone https://github.com/ttrampus/arhiv-letakov.git
@@ -14,7 +34,7 @@ cd arhiv-letakov
 ./namesti.sh
 ```
 
-`namesti.sh` naredi virtualno okolje, namesti odvisnosti in Chromium, nato pa
+`namesti.sh` naredi virtualno okolje, namesti odvisnosti, nato pa
 vpraša, kam shranjevati kataloge, katere trgovine spremljati, ali naj dela mesne
 kopije in kako pogosto naj preverja. Odgovori se zapišejo v `nastavitve.yaml`.
 Vsako vprašanje ima privzeti odgovor, tako da Enter skozi vsa da vseh sedem
@@ -27,8 +47,7 @@ sudo pacman -S tesseract tesseract-data-slv poppler        # Arch
 sudo apt install tesseract-ocr tesseract-ocr-slv poppler-utils   # Debian
 ```
 
-Na golem strežniku Chromium potrebuje še sistemske knjižnice:
-`./venv/bin/playwright install-deps chromium`.
+Brskalnika program ne potrebuje: vseh sedem trgovin teče prek navadnega HTTPS.
 
 ## Uporaba
 
@@ -189,9 +208,37 @@ Kako pridemo do posamezne trgovine:
 |---|---|
 | Mercator, Tuš, E.Leclerc | navaden HTTP, neposredne povezave na PDF |
 | Spar | navaden HTTP, a stran zahteva glave brskalnika |
-| Lidl | JSON API `endpoints.leaflets.schwarz/v4/flyer`, brez brskalnika |
-| Hofer | Akamai zavrne navaden HTTP, zato Chromium in nato PDF Publitas |
-| Eurospin | pregledovalnik JS, žeton OAuth preberemo s strani in vprašamo API |
+| Lidl | JSON API `endpoints.leaflets.schwarz/v4/flyer` |
+| Hofer | Akamai zavrne brskalniški User-Agent, zato odkrit agent; PDF stoji pri Publitas in ga poberemo iz HTML |
+| Eurospin | OAuth `client_credentials` z javno kodo odjemalca iz svežnja JS, nato navaden JSON API |
+
+### Varnost
+
+Program bere vsebino tujih strani, zato ji ne zaupa:
+
+- **Kam sme:** vsak naslov iz tuje strani ali API-ja gre skozi
+  `jedro/naslovi.py` — samo gostitelji te trgovine, samo https na vratih 443,
+  brez poverilnic in nenavadnih znakov v naslovu. Enako velja za vsako
+  preusmeritev. Ob neposredni povezavi `jedro/povezava.py` preveri še naslov IP,
+  na katerega se je vtičnica res povezala, zato tudi dovoljeno ime, ki ga DNS
+  usmeri v notranje omrežje, ne pride skozi.
+- **Koliko sme:** vsak odgovor ima zgornjo mejo velikosti in skupnega trajanja
+  (`meje` v nastavitvah); nič se ne bere v pomnilnik brez meje.
+- **PDF:** obdelava letaka teče v ločenem procesu s trdim rokom in mejo
+  pomnilnika (Linux: `RLIMIT_AS` in lastna skupina procesov; Windows: Job
+  Object z `KILL_ON_JOB_CLOSE`). Ob izteku roka umre tudi vse, kar je proces
+  zagnal (`pdftoppm`, `tesseract`), začasne slike pa pobriše starš. Pokvarjen ali
+  zlonameren PDF lahko uniči samo svojo mesno kopijo, ne zajema. `pypdf` je
+  zahtevan v različici brez znanih ranljivosti.
+- **Regularni izrazi** nad besedilom tujih strani so linearni (preverjeno z
+  ReDoS testi v `testi/test_fuzz.py`).
+- **Poverilnice:** posrednik se v dnevnik zapiše brez uporabnika in gesla;
+  program drugih gesel ne pozna.
+- **Odvisnosti:** gradnja za Windows uporablja zaklenjene različice s
+  kontrolnimi vsotami (`requirements-gradnja.txt`), CI jih preveri s
+  `pip-audit`, kodo pa z `bandit`.
+- **Zunanji programi** (`schtasks`, `icacls`, `tesseract`) se kličejo z
+  absolutno potjo, zato podtaknjen program v trenutni mapi ne more steči.
 
 ### Nova trgovina
 
