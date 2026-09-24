@@ -40,7 +40,7 @@ class Kazalo(unittest.TestCase):
 
     def test_brisanje(self):
         self.archive.record(katalog(), Path("/tmp/a.pdf"), "abc", 10)
-        row_id = self.archive.id_for_path("/tmp/a.pdf")
+        row_id = self.archive.id_for_path(str(Path("/tmp/a.pdf")))
         self.archive.record_meat_version(row_id, Path("/tmp/m.pdf"), 20, 5)
         self.archive.delete(row_id)
         self.assertEqual(self.archive.all_rows(), [])
@@ -49,7 +49,7 @@ class Kazalo(unittest.TestCase):
     def test_mesne_kopije_manjkajo(self):
         self.archive.record(katalog(), Path("/tmp/a.pdf"), "abc", 10)
         self.assertEqual(len(self.archive.magazines_without_meat_version()), 1)
-        self.archive.record_meat_version(self.archive.id_for_path("/tmp/a.pdf"),
+        self.archive.record_meat_version(self.archive.id_for_path(str(Path("/tmp/a.pdf"))),
                                          Path("/tmp/m.pdf"), 20, 5)
         self.assertEqual(self.archive.magazines_without_meat_version(), [])
 

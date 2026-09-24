@@ -29,11 +29,14 @@ class Branje(unittest.TestCase):
 
     def test_relativne_poti_glede_na_datoteko(self):
         cfg = self.nalozi("mapa_arhiva: katalogi\n")
-        self.assertEqual(cfg.archive_dir, Path(self.temp.name) / "katalogi")
+        # resolve(): na Windows je %TEMP% lahko v kratki obliki (RUNNER~1).
+        self.assertEqual(cfg.archive_dir, Path(self.temp.name).resolve() / "katalogi")
 
     def test_absolutna_pot_ostane(self):
-        cfg = self.nalozi("mapa_arhiva: /srv/letaki\n")
-        self.assertEqual(cfg.archive_dir, Path("/srv/letaki"))
+        # Absolutna pot za sistem, na katerem test teče (C:\... ali /...).
+        absolutna = Path(self.temp.name).resolve() / "letaki"
+        cfg = self.nalozi(f"mapa_arhiva: '{absolutna}'\n")
+        self.assertEqual(cfg.archive_dir, absolutna)
 
     def test_posrednik_iz_nastavitev(self):
         cfg = self.nalozi("omrezje:\n  posrednik: http://proxy.podjetje.si:3128\n")
@@ -48,16 +51,39 @@ class Branje(unittest.TestCase):
             cfg = self.nalozi("omrezje:\n  posrednik: http://iz-datoteke:3128\n")
         self.assertEqual(cfg.proxy, "http://iz-datoteke:3128")
 
-    def test_peskovnik_privzeto_vklopljen(self):
-        self.assertFalse(self.nalozi("").browser_no_sandbox)
+    def test_posrednik_v_izpisu_nima_gesla(self):
+        cfg = self.nalozi("omrezje:\n  posrednik: http://sluzba:skrivnost@proxy:3128\n")
+        self.assertNotIn("skrivnost", cfg.proxy_za_izpis)
+        self.assertIn("proxy:3128", cfg.proxy_za_izpis)
 
-    def test_peskovnik_izklopi_okolje(self):
-        with unittest.mock.patch.dict(os.environ, {"ARHIV_BREZ_PESKOVNIKA": "1"}):
-            self.assertTrue(self.nalozi("").browser_no_sandbox)
+    def test_privzete_meje(self):
+        cfg = self.nalozi("")
+        self.assertEqual(cfg.max_pdf_mb, 150)
+        self.assertEqual(cfg.max_pages, 300)
+
+    def test_meje_iz_nastavitev(self):
+        cfg = self.nalozi("meje:\n  najvecji_pdf_mb: 40\n  najvec_strani: 80\n")
+        self.assertEqual(cfg.max_pdf_mb, 40)
+        self.assertEqual(cfg.max_pages, 80)
+
+    def test_dodatni_gostitelji(self):
+        cfg = self.nalozi("omrezje:\n  dovoljeni_gostitelji:\n    spar: [nov.spar.si]\n")
+        self.assertEqual(cfg.extra_hosts, {"spar": ["nov.spar.si"]})
 
     def test_zaklep_ob_bazi(self):
-        cfg = self.nalozi("baza: /srv/letaki/arhiv.db\n")
-        self.assertEqual(cfg.lock_path, Path("/srv/letaki/arhiv.db.lock"))
+        baza = Path(self.temp.name).resolve() / "letaki" / "arhiv.db"
+        cfg = self.nalozi(f"baza: '{baza}'\n")
+        self.assertEqual(cfg.lock_path, baza.with_name("arhiv.db.lock"))
+
+    def test_bom_iz_powershell(self):
+        # Windows PowerShell 5.1 zapiše UTF-8 z BOM; nastavitve morajo delovati.
+        pot = Path(self.temp.name) / "nastavitve.yaml"
+        pot.write_bytes(b"\xef\xbb\xbfurnik: cet 06:00\n")
+        self.assertEqual(nastavitve.load(pot).schedule, "cet 06:00")
+
+    def test_nicelna_meja_se_zavrne(self):
+        with self.assertRaises(nastavitve.NapacneNastavitve):
+            self.nalozi("meje:\n  najvecji_pdf_mb: 0\n")
 
     def test_trgovine(self):
         cfg = self.nalozi("trgovine:\n  spar:\n    vklopljeno: false\n")

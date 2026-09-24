@@ -1,10 +1,10 @@
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from jedro import obvestila
-from jedro.baza import Archive
 from jedro.nastavitve import Config
 
 
@@ -44,7 +44,10 @@ class Posiljanje(unittest.TestCase):
     def test_ukaz_dobi_sporocilo_na_vhod(self):
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "obvestilo.txt"
-            obvestila.send(nastavitve(notify_command=f"cat > {target}"), "pozdrav")
+            # Python namesto cat, da test teče tudi pod cmd.exe na Windows.
+            ukaz = (f'"{sys.executable}" -c "import sys; '
+                    f"open(r'{target}', 'w').write(sys.stdin.read())\"")
+            obvestila.send(nastavitve(notify_command=ukaz), "pozdrav")
             self.assertEqual(target.read_text(), "pozdrav")
 
     def test_brez_nastavitev_ne_naredi_nicesar(self):
