@@ -15,8 +15,6 @@ services:
       - ./streznik/nastavitve.zabojnik.yaml:/etc/arhiv-letakov/nastavitve.yaml:ro
       - arhiv:/var/lib/arhiv-letakov
       - dnevniki:/var/log/arhiv-letakov
-    # Chromium rad prebije privzetih 64 MB /dev/shm.
-    shm_size: 1gb
     security_opt:
       - no-new-privileges:true
     read_only: true

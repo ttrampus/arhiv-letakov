@@ -14,3 +14,7 @@ nastavitve.yaml
 nastavitve.yaml.bak
 .git/
 .github/
+build/
+dist/
+venv-gradnja/
+*.part

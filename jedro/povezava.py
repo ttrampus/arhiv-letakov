@@ -2,18 +2,89 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Callable
+from urllib.parse import urlsplit
 
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.connection import HTTPConnection, HTTPSConnection
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 from urllib3.util.retry import Retry
 
+from . import naslovi
 from .nastavitve import Config
 
 log = logging.getLogger(__name__)
 
+KOS = 64 * 1024
+CAS_POVEZAVE_S = 20
+
+# Ne gredo naprej, ko preusmeritev vodi na drug gostitelj.
+_OSEBNE_GLAVE = ("Authorization", "Cookie", "Proxy-Authorization")
+
+
+class OmejitevPresezena(RuntimeError):
+    """Odgovor je večji ali počasnejši, kot dovolijo meje v nastavitvah."""
+
+
+class NapakaPosrednika(RuntimeError):
+    """Posrednik zavrača povezavo; sporočilo pove, kaj narediti."""
+
+
+def uporabi_sistemske_certifikate() -> bool:
+    """TLS prek shrambe certifikatov sistema (CA podjetja pri prestrezanju TLS)."""
+    try:
+        import truststore
+    except ImportError:
+        return False
+    truststore.inject_into_ssl()
+    return True
+
+
+class _PreverjenIP:
+    """Zavrne povezavo, ki je kljub dovoljenemu imenu pristala na nejavnem naslovu.
+
+    Preverja se odprta vtičnica, zato vmes DNS ne more ničesar zamenjati. Skozi
+    posrednika je sogovornik posrednik, zato tam ne velja.
+    """
+
+    def _new_conn(self):
+        sock = super()._new_conn()
+        try:
+            naslov = sock.getpeername()[0]
+        except OSError:
+            naslov = ""
+        if not naslovi.je_javen_ip(naslov):
+            sock.close()
+            raise naslovi.ZavrnjenNaslov(
+                f"{self.host} kaže na naslov, ki ni javen ({naslov or 'neznan'})")
+        return sock
+
+
+class _HTTPPovezava(_PreverjenIP, HTTPConnection):
+    pass
+
+
+class _HTTPSPovezava(_PreverjenIP, HTTPSConnection):
+    pass
+
+
+class _HTTPBazen(HTTPConnectionPool):
+    ConnectionCls = _HTTPPovezava
+
+
+class _HTTPSBazen(HTTPSConnectionPool):
+    ConnectionCls = _HTTPSPovezava
+
+
+class _Adapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        super().init_poolmanager(*args, **kwargs)
+        self.poolmanager.pool_classes_by_scheme = {"http": _HTTPBazen, "https": _HTTPSBazen}
+
 
 class HttpFetcher:
+    """Edina pot v splet: vsaka zahteva in preusmeritev gre skozi naslovi.preveri."""
+
     def __init__(self, config: Config):
         self.config = config
         self._last_request = 0.0
@@ -24,12 +95,19 @@ class HttpFetcher:
             "Accept-Language": "sl-SI,sl;q=0.9,en;q=0.8",
             "Connection": "keep-alive",
         })
+        # Brez Retry-After: strežnik bi z njim zadržal zajem poljubno dolgo.
         retry = Retry(total=config.max_retries, backoff_factor=1.5,
                       status_forcelist=(429, 500, 502, 503, 504),
-                      allowed_methods=frozenset(["GET", "HEAD"]))
-        adapter = HTTPAdapter(max_retries=retry)
+                      allowed_methods=frozenset(["GET", "HEAD"]),
+                      respect_retry_after_header=False)
+        adapter = _Adapter(max_retries=retry)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
+
+        self._proxies = ({"http": config.proxy, "https": config.proxy}
+                         if config.proxy else None)
+        if config.proxy:
+            log.info("promet teče skozi posrednika %s", config.proxy_za_izpis)
 
     def _throttle(self) -> None:
         wait = self.config.delay_between_requests - (time.monotonic() - self._last_request)
@@ -37,164 +115,114 @@ class HttpFetcher:
             time.sleep(wait)
         self._last_request = time.monotonic()
 
-    def get(self, url: str, *, stream: bool = False, **kwargs) -> requests.Response:
+    def preveri(self, url: str, store: str | None) -> str:
+        return naslovi.preveri(url, store, dodatni=self.config.extra_hosts,
+                               dovoli_http=self.config.allow_http)
+
+    def _poslji(self, metoda: str, url: str, **kwargs) -> requests.Response:
+        if self._proxies is not None:
+            kwargs.setdefault("proxies", self._proxies)
+        try:
+            return self.session.request(metoda, url, **kwargs)
+        except requests.exceptions.ProxyError as exc:
+            if "407" in str(exc):
+                raise NapakaPosrednika(
+                    "posrednik zahteva prijavo (407). Prijave NTLM/Kerberos na posredniku "
+                    "program ne podpira; strežniku ali servisnemu računu dovolite prehod "
+                    "brez prijave za gostitelje iz 'gostitelji' ali vpišite posrednika "
+                    "z osnovno prijavo") from exc
+            raise
+
+    def get(self, url: str, *, store: str | None = None, stream: bool = False,
+            **kwargs) -> requests.Response:
+        """Brez stream=True je telo že prebrano (do meje), sicer ga bere klicatelj s kosi()."""
+        target = self.preveri(url, store)
+        kwargs.pop("allow_redirects", None)
+        headers = dict(kwargs.pop("headers", None) or {})
+
+        for _ in range(self.config.max_redirects + 1):
+            self._throttle()
+            log.debug("GET %s", target)
+            response = self._poslji(
+                "GET", target, headers=headers or None, stream=True,
+                allow_redirects=False,
+                timeout=(CAS_POVEZAVE_S, self.config.request_timeout), **kwargs)
+            if not response.is_redirect:
+                try:
+                    response.raise_for_status()
+                    if not stream:
+                        self._preberi(response, target)
+                except BaseException:
+                    response.close()
+                    raise
+                return response
+
+            location = response.headers.get("Location", "")
+            response.close()
+            naslednji = self.preveri(requests.compat.urljoin(target, location), store)
+            if urlsplit(naslednji).netloc != urlsplit(target).netloc:
+                headers = {k: v for k, v in headers.items()
+                           if k.lower() not in {g.lower() for g in _OSEBNE_GLAVE}}
+            target = naslednji
+            kwargs.pop("params", None)
+
+        raise requests.TooManyRedirects(
+            f"več kot {self.config.max_redirects} preusmeritev pri {url}")
+
+    def post(self, url: str, *, store: str | None = None, **kwargs) -> requests.Response:
+        """POST na preverjen naslov; preusmeritvam pri POST ne sledimo."""
+        target = self.preveri(url, store)
         self._throttle()
-        timeout = self.config.download_timeout if stream else self.config.request_timeout
-        log.debug("GET %s", url)
-        response = self.session.get(url, timeout=timeout, stream=stream, **kwargs)
-        response.raise_for_status()
+        log.debug("POST %s", target)
+        response = self._poslji("POST", target, stream=True, allow_redirects=False,
+                                timeout=(CAS_POVEZAVE_S, self.config.request_timeout),
+                                **kwargs)
+        try:
+            response.raise_for_status()
+            self._preberi(response, target)
+        except BaseException:
+            response.close()
+            raise
         return response
 
-    def get_html(self, url: str) -> str:
-        return self.get(url).text
+    def kosi(self, response: requests.Response, limit_bytes: int, rok_s: float,
+             opis: str):
+        """Kosi telesa z mejo velikosti in skupnega trajanja celega prenosa."""
+        napovedano = response.headers.get("Content-Length", "")
+        if napovedano.isdigit() and int(napovedano) > limit_bytes:
+            raise OmejitevPresezena(
+                f"odgovor je napovedal {int(napovedano) / 1e6:.0f} MB, meja je "
+                f"{limit_bytes / 1e6:.0f} MB: {opis}")
+        rok = time.monotonic() + rok_s
+        size = 0
+        for chunk in response.iter_content(chunk_size=KOS):
+            if not chunk:
+                continue
+            size += len(chunk)
+            if size > limit_bytes:
+                raise OmejitevPresezena(
+                    f"prenos je presegel {limit_bytes / 1e6:.0f} MB: {opis}")
+            if time.monotonic() > rok:
+                raise OmejitevPresezena(f"prenos je trajal dlje od {rok_s:.0f} s: {opis}")
+            yield chunk
+
+    def _preberi(self, response: requests.Response, opis: str) -> None:
+        limit = self.config.max_page_mb * 1_000_000
+        response._content = b"".join(
+            self.kosi(response, limit, self.config.request_timeout, opis))
+        response._content_consumed = True
+
+    def get_html(self, url: str, *, store: str | None = None) -> str:
+        return self.get(url, store=store).text
 
     def close(self) -> None:
         self.session.close()
 
 
-class BrowserFetcher:
-
-    def __init__(self, config: Config):
-        self.config = config
-        self._playwright = None
-        self._browser = None
-        self._context = None
-
-    def _context_or_start(self):
-        if self._context is not None:
-            return self._context
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError as exc:
-            raise RuntimeError("Playwright manjka. Poženi ./namesti.sh ali: "
-                               "pip install playwright && playwright install chromium") from exc
-
-        log.info("Zaganjam Chromium brez okna")
-        # V zabojniku in pod utrjeno enoto Chromium ne more postaviti peskovnika.
-        args = (["--no-sandbox", "--disable-dev-shm-usage"]
-                if self.config.browser_no_sandbox else [])
-        # requests posrednika iz okolja vzame sam, Chromium ga rabi izrecno.
-        proxy = {"server": self.config.proxy} if self.config.proxy else None
-        if proxy:
-            log.info("Chromium teče skozi posrednika %s", self.config.proxy)
-        self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(
-            headless=self.config.browser_headless, args=args, proxy=proxy)
-        self._context = self._browser.new_context(
-            user_agent=self.config.user_agent,
-            locale="sl-SI",
-            viewport={"width": 1440, "height": 1000},
-            extra_http_headers={"Accept-Language": "sl-SI,sl;q=0.9,en;q=0.8"})
-        self._context.set_default_timeout(self.config.browser_timeout)
-        return self._context
-
-    def get_html(self, url: str, wait_for: str | None = None, settle_ms: int = 2500) -> str:
-        page = self._context_or_start().new_page()
-        try:
-            page.goto(url, wait_until="domcontentloaded")
-            if wait_for:
-                page.wait_for_selector(wait_for, state="attached")
-            else:
-                try:
-                    page.wait_for_load_state("networkidle")
-                except Exception:
-                    pass
-            page.wait_for_timeout(settle_ms)
-            return page.content()
-        finally:
-            page.close()
-
-    def capture(self, url: str, predicate: Callable[[str], bool], *,
-                scroll: bool = True, settle_ms: int = 4000) -> tuple[str, list[str]]:
-        page = self._context_or_start().new_page()
-        seen: list[str] = []
-
-        def on_response(response):
-            if predicate(response.url) and response.url not in seen:
-                seen.append(response.url)
-
-        page.on("response", on_response)
-        try:
-            page.goto(url, wait_until="domcontentloaded")
-            try:
-                page.wait_for_load_state("networkidle")
-            except Exception:
-                pass
-            if scroll:
-                for _ in range(12):
-                    page.mouse.wheel(0, 2000)
-                    page.wait_for_timeout(400)
-            page.wait_for_timeout(settle_ms)
-            return page.content(), seen
-        finally:
-            page.remove_listener("response", on_response)
-            page.close()
-
-    def capture_request_header(self, url: str, url_contains: str, header: str,
-                               settle_ms: int = 4000) -> str | None:
-        page = self._context_or_start().new_page()
-        found: list[str] = []
-
-        def on_request(request):
-            if url_contains in request.url and not found:
-                value = request.headers.get(header.lower())
-                if value:
-                    found.append(value)
-
-        page.on("request", on_request)
-        try:
-            page.goto(url, wait_until="domcontentloaded")
-            try:
-                page.wait_for_load_state("networkidle")
-            except Exception:
-                pass
-            page.wait_for_timeout(settle_ms)
-            return found[0] if found else None
-        finally:
-            page.remove_listener("request", on_request)
-            page.close()
-
-    def api_get(self, url: str, headers: dict[str, str] | None = None):
-        response = self._context_or_start().request.get(
-            url, headers={"Accept": "application/json", **(headers or {})},
-            timeout=self.config.browser_timeout)
-        if not response.ok:
-            raise RuntimeError(f"HTTP {response.status} pri branju {url}")
-        return response.json()
-
-    def download(self, url: str, referer: str | None = None) -> bytes:
-        response = self._context_or_start().request.get(
-            url, headers={"Referer": referer} if referer else None,
-            timeout=self.config.browser_timeout)
-        if not response.ok:
-            raise RuntimeError(f"HTTP {response.status} pri branju {url}")
-        return response.body()
-
-    def close(self) -> None:
-        for resource in (self._context, self._browser, self._playwright):
-            if resource is None:
-                continue
-            try:
-                resource.close() if resource is not self._playwright else resource.stop()
-            except Exception:
-                log.debug("napaka pri zapiranju vira brskalnika", exc_info=True)
-        self._playwright = self._browser = self._context = None
-
-
 class Fetchers:
-
     def __init__(self, config: Config):
         self.config = config
         self.http = HttpFetcher(config)
-        self._browser: BrowserFetcher | None = None
-
-    @property
-    def browser(self) -> BrowserFetcher:
-        if self._browser is None:
-            self._browser = BrowserFetcher(self.config)
-        return self._browser
 
     def close(self) -> None:
         self.http.close()
-        if self._browser is not None:
-            self._browser.close()

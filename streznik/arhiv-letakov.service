@@ -12,12 +12,17 @@ Type=oneshot
 User=@UPORABNIK@
 Group=@UPORABNIK@
 WorkingDirectory=@MAPA@
-Environment=PLAYWRIGHT_BROWSERS_PATH=@MAPA@/brskalniki
 Environment=PYTHONUNBUFFERED=1
 ExecStart=@MAPA@/venv/bin/python @MAPA@/letaki.py --nastavitve /etc/arhiv-letakov/nastavitve.yaml prenesi
 
-# Chromium in OCR sta počasna.
+# OCR je počasen; ena velika serija letakov lahko traja dlje časa.
 TimeoutStartSec=7200
+
+# Meje v nastavitvah so prva obramba, systemd pa je druga: tudi če program
+# podivja, ne sme pojesti strežnika.
+MemoryMax=2G
+CPUQuota=150%
+TasksMax=128
 
 # Ob napaki poskusi še dvakrat, preden odneha do naslednjega zagona.
 Restart=on-failure

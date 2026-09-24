@@ -1,4 +1,4 @@
-requests>=2.31
+requests>=2.32.4
 beautifulsoup4>=4.12
 PyYAML>=6.0
 
@@ -11,8 +11,13 @@ img2pdf>=0.5
 Pillow>=10.0
 
 # Branje in pisanje arhiviranih PDF za kopije samo z mesnimi stranmi.
-pypdf>=4.0
+# 6.16.1 popravi znane napake, pri katerih izdelan PDF zatakne branje besedila
+# ali požre pomnilnik (PYSEC-2026-3655/3656/3910/3911/3912/3913).
+pypdf>=6.16.1
 
-# Potrebujeta ga samo trgovini, ki tečeta skozi brskalnik (hofer, eurospin).
-# Po namestitvi prenesi še brskalnik:  playwright install chromium
-playwright>=1.40
+# TLS prek sistemske shrambe certifikatov: deluje tudi za posrednikom podjetja,
+# ki prestreza TLS s certifikatom lastne CA.
+truststore>=0.10
+
+# Gradnja .exe za Windows strežnike; za samo poganjanje ni potreben.
+pyinstaller>=6.0; sys_platform == "win32"

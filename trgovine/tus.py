@@ -15,7 +15,7 @@ class TusStore(BaseStore):
     listing_url = "https://www.tus.si/katalogi/"
 
     def find_magazines(self, fetchers: Fetchers) -> list[Magazine]:
-        soup = self.soup(fetchers.http.get_html(self.listing_url))
+        soup = self.soup(self.html(fetchers))
         magazines = []
         seen = set()
 
@@ -24,8 +24,8 @@ class TusStore(BaseStore):
             if not pdf_link:
                 continue
 
-            file_url = self.absolute(pdf_link["href"])
-            if file_url in seen:
+            file_url = self.absolute(pdf_link["href"], fetchers)
+            if not file_url or file_url in seen:
                 continue
             seen.add(file_url)
 
@@ -40,7 +40,7 @@ class TusStore(BaseStore):
             magazines.append(self.magazine(
                 clean(heading.get_text()) if heading else "Katalog",
                 file_url=file_url,
-                source_url=self.absolute(detail["href"]) if detail else self.listing_url,
+                source_url=self.absolute(detail["href"], fetchers) if detail else self.listing_url,
                 date_from=date_from,
                 date_to=date_to))
 

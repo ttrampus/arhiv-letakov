@@ -7,16 +7,31 @@ urnik: dnevno 06:00
 
 omrezje:
   cas_zahteve: 60
-  cas_prenosa: 300
+  cas_prenosa: 900
   premor_med_zahtevami: 2.0
   poskusi: 3
   user_agent: >-
     Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko)
     Chrome/126.0.0.0 Safari/537.36
+  # posrednik: http://proxy.podjetje.si:8080
+  # Program sme obiskati samo gostitelje trgovin (glej: letaki gostitelji).
+  # Ko trgovina preseli datoteke na nov naslov, ga dodaj tu, brez nove izdaje.
+  # dovoljeni_gostitelji:
+  #   spar: [nov-letak.spar.si]
 
-brskalnik:
-  brez_okna: true
-  cas_ms: 60000
+# Zgornje meje, da en velik ali pokvarjen odgovor ne zasede strežnika.
+# cas_prenosa zgoraj velja za cel prenos ene datoteke, ne za posamezen kos.
+meje:
+  najvecji_pdf_mb: 150
+  najvecja_slika_mb: 25
+  najvecji_letak_skupaj_mb: 400
+  najvec_slik: 200
+  najvecja_stran_mb: 20          # HTML strani in odgovori API
+  najvec_preusmeritev: 5
+  najvec_strani: 300
+  cas_obdelave_pdf_s: 900        # mehka meja; trda je 2 minuti več, nato proces ubijemo
+  cas_ocr_strani_s: 60
+  najvec_pomnilnika_mb: 2048     # za obdelavo PDF (Linux: RLIMIT_AS, Windows: Job Object)
 
 izbor:
   samo_zivila: true

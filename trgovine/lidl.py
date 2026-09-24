@@ -27,9 +27,8 @@ class LidlStore(BaseStore):
         magazines: dict[str, Magazine] = {}
         for slug in slugs:
             try:
-                payload = fetchers.http.get(
-                    API, params={"flyer_identifier": slug}, headers={"Accept": "application/json"}
-                ).json()
+                payload = self.json(fetchers, API, params={"flyer_identifier": slug},
+                                    headers={"Accept": "application/json"})
             except Exception as exc:
                 self.log.warning("poizvedba API za %s ni uspela (%s)", slug, exc)
                 continue
@@ -39,7 +38,7 @@ class LidlStore(BaseStore):
                 self.log.warning("za %s ni podatkov o letaku", slug)
                 continue
 
-            for magazine in self._from_flyer(flyer):
+            for magazine in self._from_flyer(flyer, fetchers):
                 magazines.setdefault(magazine.file_url, magazine)
 
         return list(magazines.values())
@@ -48,7 +47,7 @@ class LidlStore(BaseStore):
         slugs: list[str] = []
         for url in (self.listing_url, "https://www.lidl.si/"):
             try:
-                html = fetchers.http.get_html(url)
+                html = self.html(fetchers, url)
             except Exception as exc:
                 self.log.warning("ni bilo mogoče prebrati %s (%s)", url, exc)
                 continue
@@ -57,30 +56,33 @@ class LidlStore(BaseStore):
                     slugs.append(slug)
         return slugs
 
-    def _from_flyer(self, flyer: dict) -> list[Magazine]:
+    def _from_flyer(self, flyer: dict, fetchers: Fetchers) -> list[Magazine]:
+        """Naslovi pridejo iz tujega API-ja, zato gredo skozi isto preverjanje."""
         found: list[Magazine] = []
 
-        pdf_url = flyer.get("pdfUrl") or flyer.get("hiResPdfUrl")
+        pdf_url = self.absolute(flyer.get("pdfUrl") or flyer.get("hiResPdfUrl") or "", fetchers)
         if pdf_url:
             found.append(
                 self.magazine(
                     _title(flyer),
                     file_url=pdf_url,
-                    source_url=flyer.get("flyerUrlAbsolute") or self.listing_url,
+                    source_url=self.absolute(flyer.get("flyerUrlAbsolute") or "", fetchers)
+                    or self.listing_url,
                     date_from=_parse(flyer.get("startDate")),
                     date_to=_parse(flyer.get("endDate")),
                 )
             )
 
         for related in flyer.get("relatedFlyers") or []:
-            related_pdf = related.get("pdfUrl")
+            related_pdf = self.absolute(related.get("pdfUrl") or "", fetchers)
             if not related_pdf:
                 continue
             found.append(
                 self.magazine(
                     _title(related),
                     file_url=related_pdf,
-                    source_url=related.get("url") or self.listing_url,
+                    source_url=self.absolute(related.get("url") or "", fetchers)
+                    or self.listing_url,
                     date_from=_parse(related.get("startDate")),
                     date_to=_parse(related.get("endDate")),
                 )

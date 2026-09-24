@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import subprocess
 import sys
@@ -52,8 +54,7 @@ def _ask_archive_dir(root: Path) -> str:
 def _ask_stores(stores: list) -> dict[str, bool]:
     print("\nTrgovine:")
     for index, store in enumerate(stores, 1):
-        note = "  (potrebuje Chromium brez okna)" if store.requires_browser else ""
-        print(f"  {index}. {store.label}{note}")
+        print(f"  {index}. {store.label}")
 
     answer = _ask("Katere? 'vse' ali številke, npr. 1,3,5",
                   default="vse").strip().lower()
@@ -99,13 +100,17 @@ def _ask_schedule() -> str:
     if urnik_modul.is_manual(answer):
         return "ročno"
 
-    print(f"  -> {answer}  (systemd OnCalendar={urnik_modul.describe(answer)})")
+    print(f"  -> {answer}  ({urnik_modul.describe(answer)})")
     return answer
 
 
 def _offer_timer(root: Path, config_path: Path, schedule: str) -> None:
     if urnik_modul.is_manual(schedule):
         print("\nBrez časovnika. Poženi ./letaki prenesi, kadar hočeš.")
+        return
+    if os.name == "nt":
+        print("\nNa Windows strežniku opravilo registrira namesti-windows.ps1")
+        print("(servisni račun, pravice na delnici in omejitve časa).")
         return
     if not shutil.which("systemctl"):
         print("\nTu ni systemd, zato časovnika ni mogoče namestiti samodejno.")
@@ -149,7 +154,7 @@ def _render(answers: dict, stores: list) -> str:
         for store in stores
     )
     return f"""\
-mapa_arhiva: {answers["archive_dir"]}
+mapa_arhiva: {json.dumps(answers["archive_dir"], ensure_ascii=False)}
 baza: arhiv.db
 mapa_dnevnikov: dnevniki
 
@@ -158,15 +163,11 @@ urnik: {answers["schedule"]}
 
 omrezje:
   cas_zahteve: 60
-  cas_prenosa: 300
+  cas_prenosa: 900
   premor_med_zahtevami: 2.0
   poskusi: 3
   user_agent: >-
     {CHROME_UA}
-
-brskalnik:
-  brez_okna: true
-  cas_ms: 60000
 
 izbor:
   samo_zivila: {str(answers["only_food"]).lower()}
@@ -230,8 +231,12 @@ def _ask_yes_no(question: str, default: bool) -> bool:
         print("  Odgovori z d ali n.")
 
 
-def offer_first_run(root: Path) -> None:
+def offer_first_run(root: Path, config_path: Path | None = None) -> None:
     if not _ask_yes_no("Naj prenesem, kar je na voljo zdaj?", default=True):
         return
     print()
-    subprocess.run([sys.executable, str(root / "letaki.py"), "prenesi"], cwd=root)
+    ukaz = ([sys.executable] if getattr(sys, "frozen", False)
+            else [sys.executable, str(root / "letaki.py")])
+    if config_path is not None:
+        ukaz += ["--nastavitve", str(config_path)]
+    subprocess.run([*ukaz, "prenesi"], cwd=root)

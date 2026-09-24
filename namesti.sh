@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enkratna namestitev: virtualno okolje, odvisnosti, brskalnik brez okna in
+# Enkratna namestitev: virtualno okolje, odvisnosti in
 # nato vodena nastavitev. Znova ga lahko poženeš kadar koli.
 set -e
 cd "$(dirname "$0")"
@@ -18,12 +18,6 @@ echo "Nameščam odvisnosti ..."
 venv/bin/pip install --quiet --upgrade pip
 venv/bin/pip install --quiet -r requirements.txt
 
-# Chromium je ~150 MB, zato ga prenesemo samo, kadar ga še ni.
-if ! venv/bin/python -c 'from playwright.sync_api import sync_playwright
-with sync_playwright() as p: p.chromium.launch().close()' >/dev/null 2>&1; then
-    echo "Nameščam Chromium brez okna (potrebujeta ga Hofer in Eurospin) ..."
-    venv/bin/playwright install chromium
-fi
 
 if ! command -v tesseract >/dev/null; then
     echo

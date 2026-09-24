@@ -9,16 +9,10 @@ urnik: ročno
 
 omrezje:
   cas_zahteve: 60
-  cas_prenosa: 300
+  cas_prenosa: 900
   premor_med_zahtevami: 2.0
   poskusi: 3
   # posrednik: http://proxy.podjetje.si:3128   # sicer se vzame HTTPS_PROXY
-
-brskalnik:
-  brez_okna: true
-  cas_ms: 60000
-  # V zabojniku Chromium svojega peskovnika ne more postaviti.
-  brez_peskovnika: true
 
 izbor:
   samo_zivila: true

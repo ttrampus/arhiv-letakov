@@ -13,7 +13,7 @@ class MercatorStore(BaseStore):
     listing_url = "https://www.mercator.si/katalogi/"
 
     def find_magazines(self, fetchers: Fetchers) -> list[Magazine]:
-        soup = self.soup(fetchers.http.get_html(self.listing_url))
+        soup = self.soup(self.html(fetchers))
         magazines = []
 
         for item in soup.select("li.catalog-item"):
@@ -33,8 +33,8 @@ class MercatorStore(BaseStore):
             detail = item.select_one('a[href^="/katalogi/"]')
             magazines.append(self.magazine(
                 title,
-                file_url=self.absolute(pdf_link["href"]),
-                source_url=self.absolute(detail["href"]) if detail else self.listing_url,
+                file_url=self.absolute(pdf_link["href"], fetchers),
+                source_url=self.absolute(detail["href"], fetchers) if detail else self.listing_url,
                 date_from=date_from,
                 date_to=date_to))
 

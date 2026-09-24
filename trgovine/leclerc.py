@@ -19,7 +19,7 @@ class LeclercStore(BaseStore):
     listing_url = "https://www.e-leclerc.si/category/katalogi/vsi-katalogi/"
 
     def find_magazines(self, fetchers: Fetchers) -> list[Magazine]:
-        soup = self.soup(fetchers.http.get_html(self.listing_url))
+        soup = self.soup(self.html(fetchers))
         magazines: list[Magazine] = []
         seen: set[str] = set()
 
@@ -28,8 +28,8 @@ class LeclercStore(BaseStore):
             if not pdf_link:
                 continue
 
-            file_url = self.absolute(pdf_link["href"])
-            if file_url in seen or NOT_A_FLYER.search(file_url):
+            file_url = self.absolute(pdf_link["href"], fetchers)
+            if not file_url or file_url in seen or NOT_A_FLYER.search(file_url):
                 continue
             seen.add(file_url)
 
@@ -46,7 +46,7 @@ class LeclercStore(BaseStore):
                 self.magazine(
                     title,
                     file_url=file_url,
-                    source_url=self.absolute(viewer["href"]) if viewer else self.listing_url,
+                    source_url=self.absolute(viewer["href"], fetchers) if viewer else self.listing_url,
                     date_from=date_from,
                     date_to=date_to,
                 )

@@ -32,7 +32,7 @@ spec:
                   value: Europe/Ljubljana
               resources:
                 requests: {cpu: "500m", memory: 1Gi}
-                limits: {cpu: "2", memory: 3Gi}
+                limits: {cpu: "2", memory: 1Gi}
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
@@ -42,8 +42,6 @@ spec:
                 - {name: arhiv, mountPath: /var/lib/arhiv-letakov}
                 - {name: dnevniki, mountPath: /var/log/arhiv-letakov}
                 - {name: zacasno, mountPath: /tmp}
-                # Chromium potrebuje večji /dev/shm od privzetih 64 MB.
-                - {name: shm, mountPath: /dev/shm}
           volumes:
             - name: nastavitve
               configMap: {name: arhiv-letakov-nastavitve}
@@ -53,8 +51,6 @@ spec:
               emptyDir: {}
             - name: zacasno
               emptyDir: {}
-            - name: shm
-              emptyDir: {medium: Memory, sizeLimit: 1Gi}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

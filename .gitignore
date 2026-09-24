@@ -12,3 +12,8 @@ arhiv.db-shm
 arhiv.db.lock
 dnevniki/
 brskalniki/
+
+# gradnja za Windows
+build/
+dist/
+venv-gradnja/

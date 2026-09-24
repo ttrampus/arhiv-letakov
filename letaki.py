@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jedro import nastavitve as nastavitve_modul
-from jedro import izbor, dnevnik, obvestila, strani, urnik, carovnik, zaklep
+from jedro import izbor, dnevnik, naslovi, obvestila, strani, urnik, carovnik, zaklep
 from jedro.baza import Archive
 from jedro.prenos import fetch_magazine, target_path
 from jedro.povezava import Fetchers
@@ -37,7 +38,31 @@ def cmd_run(args, cfg) -> int:
         return 0
 
 
+def _preveri_zapisljivost(cfg) -> str | None:
+    """Opis težave, če v arhiv ni mogoče pisati, sicer None."""
+    mape = [cfg.archive_dir] + ([cfg.meat_dir] if cfg.meat_enabled else [])
+    for mapa in mape:
+        try:
+            mapa.mkdir(parents=True, exist_ok=True)
+            poskus = mapa / f".arhiv-letakov-poskus-{os.getpid()}"
+            poskus.write_bytes(b"ok")
+            poskus.unlink()
+        except OSError as exc:
+            return f"v {mapa} ni mogoče pisati ({exc})"
+    return None
+
+
 def _run(args, cfg) -> int:
+    for opozorilo in cfg.opozorila():
+        log.warning("%s", opozorilo)
+
+    if not args.dry_run:
+        tezava = _preveri_zapisljivost(cfg)
+        if tezava:
+            log.error("Zajem ne more začeti: %s", tezava)
+            obvestila.send(cfg, f"arhiv-letakov: zajem ne dela\n{tezava}")
+            return 1
+
     with Archive(cfg.db_path) as archive:
         stores = [s for s in get_stores(args.stores)
                   if args.stores or cfg.store_enabled(s.name)]
@@ -48,21 +73,29 @@ def _run(args, cfg) -> int:
         fetchers = Fetchers(cfg)
         totals = [0, 0, 0]
         broken = []
+        nedosegljive = []
         try:
             for store in stores:
                 try:
-                    found, result = process_store(store, fetchers, archive, cfg, args.dry_run)
+                    found, result, napaka = process_store(store, fetchers, archive, cfg,
+                                                          args.dry_run)
                     totals = [a + b for a, b in zip(totals, result)]
-                    if found:
-                        archive.note_store_result(store.name, True)
-                    else:
+                    downloaded, _, failed = result
+                    if not found:
                         archive.note_store_result(store.name, False, "nič najdenega")
                         broken.append(store.name)
+                    elif failed and not downloaded:
+                        # npr. trgovina je preselila datoteke na neznanega gostitelja
+                        archive.note_store_result(store.name, False, napaka[:200])
+                        broken.append(store.name)
+                    else:
+                        archive.note_store_result(store.name, True)
                 except Exception as exc:
                     log.error("%s: zajem ni uspel: %s", store.name, exc)
                     log.debug("sled napake", exc_info=True)
                     archive.note_store_result(store.name, False, str(exc)[:200])
                     broken.append(store.name)
+                    nedosegljive.append(store.name)
         finally:
             fetchers.close()
 
@@ -71,7 +104,12 @@ def _run(args, cfg) -> int:
                  verb, totals[0], totals[1], totals[2])
         if broken:
             log.warning("Trgovine brez rezultata: %s", ", ".join(broken))
-        return _report_failures(archive, cfg)
+        izid = _report_failures(archive, cfg)
+        if len(nedosegljive) == len(stores):
+            log.error("Nobena trgovina ni dosegljiva; preveri posrednika, požarni "
+                      "zid (glej: gostitelji) in DNS.")
+            return 1
+        return izid or (1 if totals[2] else 0)
 
 
 def _report_failures(archive, cfg) -> int:
@@ -92,15 +130,22 @@ def process_store(store: BaseStore, fetchers, archive, cfg, dry_run: bool):
 
     if not magazines:
         log.warning("%s: nič najdenega (postavitev strani se je morda spremenila)", store.name)
-        return 0, (0, 0, 0)
+        return 0, (0, 0, 0), ""
 
     if cfg.only_food:
         magazines = [m for m in magazines if _is_food(m, cfg)]
 
     log.info("%s: najdenih katalogov: %s", store.name, len(magazines))
     downloaded = skipped = failed = 0
+    napaka = ""
 
     for magazine in magazines:
+        if not magazine.file_url and not magazine.image_urls:
+            log.warning("  preskok (ni uporabne povezave): %s", magazine.title)
+            napaka = "povezava na letak zavrnjena ali prazna"
+            failed += 1
+            continue
+
         if archive.has_url(magazine.dedupe_key):
             log.info("  preskok (že v arhivu): %s", magazine.describe())
             skipped += 1
@@ -115,10 +160,11 @@ def process_store(store: BaseStore, fetchers, archive, cfg, dry_run: bool):
         log.info("  prenašam: %s", magazine.describe())
         try:
             path, sha256, size = fetch_magazine(magazine, fetchers, destination,
-                                                use_browser=store.requires_browser)
+                                                store=store.name)
         except Exception as exc:
             log.error("  ni uspelo: %s (%s)", magazine.title, exc)
             log.debug("sled napake", exc_info=True)
+            napaka = str(exc)
             failed += 1
             continue
 
@@ -138,7 +184,7 @@ def process_store(store: BaseStore, fetchers, archive, cfg, dry_run: bool):
             path.unlink(missing_ok=True)
             skipped += 1
 
-    return found, (downloaded, skipped, failed)
+    return found, (downloaded, skipped, failed), napaka
 
 
 def _is_food(magazine: Magazine, cfg) -> bool:
@@ -166,7 +212,14 @@ def build_meat_version(archive, cfg, original: Path) -> None:
                     original.name, cfg.archive_dir)
         return
     try:
-        result = strani.filter_pdf(original, destination, use_ocr=cfg.meat_ocr)
+        result = strani.filter_pdf_izolirano(
+            original, destination, use_ocr=cfg.meat_ocr,
+            max_pages=cfg.max_pages, budget_s=cfg.pdf_budget_s,
+            page_timeout_s=cfg.ocr_page_timeout_s,
+            trdi_rok_s=cfg.pdf_budget_s + 120, pomnilnik_mb=cfg.max_memory_mb)
+    except (strani.PrevelikPdf, strani.CasPotekel) as exc:
+        log.warning("  mesne kopije ne delam: %s", exc)
+        return
     except Exception as exc:
         log.error("  izbor mesnih strani ni uspel za %s (%s)", original.name, exc)
         log.debug("sled napake", exc_info=True)
@@ -307,19 +360,49 @@ def cmd_audit(args, cfg) -> int:
 def cmd_setup(args, cfg) -> int:
     carovnik.run(cfg.config_path, get_stores(), reconfigure=cfg.config_path.exists())
     if args.first_run:
-        carovnik.offer_first_run(cfg.root)
+        carovnik.offer_first_run(cfg.root, cfg.config_path)
+    return 0
+
+
+def cmd_hosts(args, cfg) -> int:
+    """Gostitelji, ki jih mora dovoliti požarni zid."""
+    dodatni = sorted({h for hosts in cfg.extra_hosts.values() for h in hosts})
+    imena = sorted(set(naslovi.ZA_POZARNI_ZID) | {h for h in dodatni if not h.startswith(".")})
+    if args.json:
+        print(json.dumps(imena, ensure_ascii=False, indent=2))
+        return 0
+    print("Odhodni HTTPS (443) je potreben samo na te gostitelje:\n")
+    for ime in imena:
+        print(f"  {ime}")
+    # Program sam dovoli tudi poddomene lastnih domen trgovin, za primer, ko
+    # trgovina datoteke preseli; požarni zid, ki zna imena z *, jih lahko doda.
+    poddomene = sorted(f"*{h}" for h in naslovi.gostitelji(dodatni=cfg.extra_hosts)
+                       if h.startswith("."))
+    print("\nČe požarni zid pozna imena z *, zadošča tudi:")
+    print("  " + "  ".join(poddomene))
     return 0
 
 
 def cmd_schedule(args, cfg) -> int:
+    if args.action == "sprozilci":
+        # Za namesti-windows.ps1: urnik iz nastavitev kot sprožilci opravila.
+        # Ena vrstica JSON na sprožilec, da ga PowerShell 5.1 prebere nedvoumno.
+        from jedro.urnik import _windows
+        if not urnik.is_manual(cfg.schedule):
+            for sprozilec in _windows.sprozilci(cfg.schedule):
+                print(json.dumps(sprozilec))
+        return 0
     if args.action == "namesti":
         if urnik.is_manual(cfg.schedule):
             print("V nastavitve.yaml piše urnik: ročno, torej ni česa namestiti.")
             print("Vpiši uro (npr. 'dnevno 06:00') in poženi to znova.")
             return 1
-        oncalendars = urnik.install(cfg.root, cfg.schedule, cfg.config_path)
-        print(f"Nameščeno: zagon {cfg.schedule}  "
-              f"(systemd OnCalendar={', '.join(oncalendars)})")
+        try:
+            vpisi = urnik.install(cfg.root, cfg.schedule, cfg.config_path)
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print(f"Nameščeno: zagon {cfg.schedule}  ({', '.join(vpisi)})")
         print("Uro spremeni v nastavitve.yaml, nato poženi to znova.")
     elif args.action == "odstrani":
         urnik.remove()
@@ -384,7 +467,19 @@ def _po_slovensko(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return parser
 
 
+def _pripravi_okolje() -> None:
+    # Naslovi letakov imajo znake zunaj kodne strani konzole Windows.
+    for tok in (sys.stdout, sys.stderr):
+        if tok is not None and hasattr(tok, "reconfigure"):
+            tok.reconfigure(errors="backslashreplace")
+    if os.name == "nt":
+        os.environ["NoDefaultCurrentDirectoryInExePath"] = "1"
+    from jedro.povezava import uporabi_sistemske_certifikate
+    uporabi_sistemske_certifikate()
+
+
 def main() -> int:
+    _pripravi_okolje()
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("-h", "--pomoc", action="help", default=argparse.SUPPRESS,
                         help="izpiši to pomoč in končaj")
@@ -431,9 +526,13 @@ def main() -> int:
     status.add_argument("--json", action="store_true", help="izpiši kot JSON")
     status.set_defaults(func=cmd_status)
 
+    hosts = podukaz("gostitelji", "naslovi, ki jih mora dovoliti požarni zid")
+    hosts.add_argument("--json", action="store_true", help="izpiši kot JSON")
+    hosts.set_defaults(func=cmd_hosts)
+
     sched = podukaz("urnik", "namesti ali odstrani samodejni časovnik")
     sched.add_argument("action", nargs="?", default="stanje",
-                       choices=["namesti", "odstrani", "stanje"])
+                       choices=["namesti", "odstrani", "stanje", "sprozilci"])
     sched.set_defaults(func=cmd_schedule)
 
     setup = podukaz("nastavitev", "vprašanja, ki napišejo nastavitve.yaml in namestijo časovnik")
@@ -449,7 +548,11 @@ def main() -> int:
     config_path = getattr(args, "config", None)
     verbose = getattr(args, "verbose", False)
 
-    cfg = nastavitve_modul.load(config_path)
+    try:
+        cfg = nastavitve_modul.load(config_path)
+    except (nastavitve_modul.NapacneNastavitve, ValueError, TypeError) as exc:
+        print(f"Napaka v nastavitvah: {exc}", file=sys.stderr)
+        return 2
 
     if not cfg.config_path.exists() and args.command != "nastavitev":
         if sys.stdin.isatty():
@@ -470,6 +573,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Za otroške procese obdelave PDF v .exe.
+    import multiprocessing
+    multiprocessing.freeze_support()
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:

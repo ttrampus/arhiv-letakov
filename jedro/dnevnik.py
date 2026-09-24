@@ -41,3 +41,4 @@ def setup(log_dir: Path, verbose: bool = False) -> None:
 
     for noisy in ("urllib3", "PIL", "img2pdf"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    logging.getLogger("pypdf").setLevel(logging.ERROR)

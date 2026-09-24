@@ -4,7 +4,9 @@ import re
 from datetime import date
 
 _DATE = re.compile(r"(\d{1,2})\s*\.\s*(\d{1,2})\s*\.(?:\s*(\d{4}))?")
-_SEPARATORS = re.compile(r"\s*(?:-|–|—|do|to)\s*", re.IGNORECASE)
+# Brez \s* na robovih: pri dolgem nizu presledkov je vračanje eksplodiralo.
+_SEPARATORS = re.compile(r"(?:-|–|—|\bdo\b|\bto\b)", re.IGNORECASE)
+NAJVEC_ZNAKOV = 2000
 
 _MONTH_NAMES = {
     "januar": 1, "februar": 2, "marec": 3, "marca": 3, "april": 4, "maj": 5,
@@ -19,6 +21,7 @@ _MONTH_TEXT = re.compile(
 def parse_range(text: str | None) -> tuple[date | None, date | None]:
     if not text:
         return None, None
+    text = text[:NAJVEC_ZNAKOV]
 
     matches = _DATE.findall(text)
     if not matches:
@@ -62,4 +65,5 @@ def _parse_month_name(text: str) -> date | None:
 
 
 def looks_like_range(text: str) -> bool:
+    text = text[:NAJVEC_ZNAKOV]
     return bool(_DATE.search(text) and _SEPARATORS.search(text))

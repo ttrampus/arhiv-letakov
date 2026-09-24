@@ -90,7 +90,7 @@ echo "==> Koda"
 if command -v rsync >/dev/null; then
     rsync -a --delete \
           --exclude venv/ --exclude arhiv/ --exclude arhiv-meso/ \
-          --exclude dnevniki/ --exclude brskalniki/ --exclude .git/ \
+          --exclude dnevniki/ --exclude .git/ \
           --exclude __pycache__/ --exclude 'nastavitve.yaml' --exclude '*.db' \
           "$IZVOR"/ "$MAPA"/
 else
@@ -106,14 +106,6 @@ echo "==> Virtualno okolje in odvisnosti"
 [ -x "$MAPA/venv/bin/python" ] || python3 -m venv "$MAPA/venv"
 "$MAPA/venv/bin/pip" install --quiet --upgrade pip
 "$MAPA/venv/bin/pip" install --quiet -r "$MAPA/requirements.txt"
-
-# Brskalnik gre v mapo s kodo; v /root/.cache ga storitveni uporabnik ne najde.
-echo "==> Chromium brez okna"
-export PLAYWRIGHT_BROWSERS_PATH="$MAPA/brskalniki"
-"$MAPA/venv/bin/playwright" install chromium
-"$MAPA/venv/bin/playwright" install-deps chromium || \
-    echo "opozorilo: sistemskih knjižnic za Chromium ni bilo mogoče namestiti"
-chmod -R a+rX "$MAPA/brskalniki"
 
 # nastavitve
 if [ -f "$NASTAVITVE" ]; then
@@ -134,7 +126,6 @@ cfg["baza"] = f"{podatki}/arhiv.db"
 cfg["mapa_dnevnikov"] = os.environ["DNEVNIKI"]
 cfg["urnik"] = os.environ["URNIK"]
 cfg.setdefault("mesne_strani", {})["mapa"] = f"{podatki}/arhiv-meso"
-cfg.setdefault("brskalnik", {})["brez_peskovnika"] = True
 
 cilj.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
 PY
@@ -146,7 +137,6 @@ fi
 # ukaz letaki
 cat > /usr/local/bin/letaki <<UKAZ
 #!/bin/sh
-export PLAYWRIGHT_BROWSERS_PATH=$MAPA/brskalniki
 exec $MAPA/venv/bin/python $MAPA/letaki.py --nastavitve $NASTAVITVE "\$@"
 UKAZ
 chmod 755 /usr/local/bin/letaki

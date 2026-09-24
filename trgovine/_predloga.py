@@ -11,10 +11,9 @@ class TemplateStore(BaseStore):
     name = "predloga"
     label = "Ime trgovine"
     listing_url = "https://www.example.si/katalogi/"
-    requires_browser = False
 
     def find_magazines(self, fetchers: Fetchers) -> list[Magazine]:
-        html = fetchers.http.get_html(self.listing_url)
+        html = self.html(fetchers)
         soup = self.soup(html)
 
         magazines: list[Magazine] = []
@@ -31,7 +30,7 @@ class TemplateStore(BaseStore):
             magazines.append(
                 self.magazine(
                     title,
-                    file_url=self.absolute(pdf_link["href"]),
+                    file_url=self.absolute(pdf_link["href"], fetchers),
                     source_url=self.listing_url,
                     date_from=date_from,
                     date_to=date_to,

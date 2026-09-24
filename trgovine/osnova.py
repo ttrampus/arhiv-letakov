@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 from jedro.povezava import Fetchers
 from jedro.modeli import Magazine
+from jedro.naslovi import ZavrnjenNaslov, preveri
 
 _PARSER = "lxml" if find_spec("lxml") else "html.parser"
 
@@ -17,7 +18,7 @@ class BaseStore:
     name: str = ""
     label: str = ""
     listing_url: str = ""
-    requires_browser: bool = False
+    headers: dict[str, str] = {}
 
     def __init__(self) -> None:
         self.log = logging.getLogger(f"stores.{self.name}")
@@ -28,8 +29,29 @@ class BaseStore:
     def soup(self, html: str) -> BeautifulSoup:
         return BeautifulSoup(html, _PARSER)
 
-    def absolute(self, href: str) -> str:
-        return urljoin(self.listing_url, href.strip())
+    def absolute(self, href: str, fetchers: Fetchers | None = None) -> str:
+        """Absolutni naslov, če je gostitelj dovoljen, sicer prazen niz."""
+        href = (href or "").strip()
+        if not href:
+            return ""
+        url = urljoin(self.listing_url, href)
+        try:
+            if fetchers is not None:
+                return fetchers.http.preveri(url, self.name)
+            return preveri(url, self.name)
+        except ZavrnjenNaslov as exc:
+            self.log.warning("povezavo preskočim: %s", exc)
+            return ""
+
+    def html(self, fetchers: Fetchers, url: str | None = None, **kwargs) -> str:
+        return self.get(fetchers, url or self.listing_url, **kwargs).text
+
+    def json(self, fetchers: Fetchers, url: str, **kwargs):
+        return self.get(fetchers, url, **kwargs).json()
+
+    def get(self, fetchers: Fetchers, url: str, **kwargs):
+        headers = {**self.headers, **(kwargs.pop("headers", None) or {})}
+        return fetchers.http.get(url, store=self.name, headers=headers or None, **kwargs)
 
     def magazine(self, title: str, **kwargs) -> Magazine:
         return Magazine(store=self.name, title=clean(title), **kwargs)

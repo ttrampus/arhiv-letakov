@@ -13,7 +13,8 @@ _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
-_JAVA_DATE = re.compile(r"\b([A-Z][a-z]{2})\s+(\d{1,2})\b.*?\b(\d{4})\b")
+# Java Date.toString(): "Sun Aug 02 00:00:00 CEST 2026". Omejen razmik, sicer ReDoS.
+_JAVA_DATE = re.compile(r"\b([A-Z][a-z]{2})\s{1,3}(\d{1,2})\b[^\n]{0,40}?\b(\d{4})\b")
 _SLUG = re.compile(r"letak\.spar\.si/([^/]+)/")
 
 
@@ -23,7 +24,7 @@ class SparStore(BaseStore):
     listing_url = "https://www.spar.si/letak"
 
     def find_magazines(self, fetchers: Fetchers) -> list[Magazine]:
-        soup = self.soup(fetchers.http.get_html(self.listing_url))
+        soup = self.soup(self.html(fetchers))
         magazines: list[Magazine] = []
         seen: set[str] = set()
 
@@ -36,8 +37,8 @@ class SparStore(BaseStore):
             if not pdf_link:
                 continue
 
-            file_url = self.absolute(pdf_link["href"])
-            if file_url in seen:
+            file_url = self.absolute(pdf_link["href"], fetchers)
+            if not file_url or file_url in seen:
                 continue
             seen.add(file_url)
 
@@ -73,7 +74,7 @@ class SparStore(BaseStore):
 
 
 def _parse_java_date(value: str) -> date | None:
-    match = _JAVA_DATE.search(value)
+    match = _JAVA_DATE.search(value[:200])
     if not match:
         return None
     month = _MONTHS.get(match.group(1).lower())
