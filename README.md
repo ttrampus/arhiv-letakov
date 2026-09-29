@@ -73,8 +73,8 @@ virtualnega okolja.
 ## Na strežniku
 
 Spodnje velja za računalnik, na katerem imaš svoj uporabniški račun. Za
-namestitev v podjetju — sistemski uporabnik, koda v `/opt`, nastavitve v
-`/etc`, Docker ali Kubernetes — glej **[NAMESTITEV-STREZNIK.md](NAMESTITEV-STREZNIK.md)**
+namestitev v podjetju (sistemski uporabnik, koda v `/opt`, nastavitve v
+`/etc`, Docker ali Kubernetes) glej **[NAMESTITEV-STREZNIK.md](NAMESTITEV-STREZNIK.md)**
 in `sudo ./namesti-streznik.sh`.
 
 ```bash
@@ -134,7 +134,7 @@ zajem števec ponastavi, stanje pa vidiš tudi v izpisu golega `./letaki`.
 Če hočeš ob neuspehu obvestilo prek systemd, dodaj enoti `OnFailure=`.
 
 Prostor: en teden vseh sedmih trgovin je okoli 170 MB, mesne kopije še kakih 40 %
-tega, torej računaj z 9-10 GB na leto. Arhiv se sam ne obrezuje.
+tega, torej računaj z okoli 12 GB na leto. Arhiv se sam ne obrezuje.
 
 ## Kaj se zbira
 
@@ -180,12 +180,12 @@ Po dodajanju besede v `STEMS` poženi `./letaki meso --znova`.
 ## Testi
 
 ```bash
-venv/bin/python -m unittest discover -s testi -t .
+venv/bin/python -m pytest testi
 ```
 
-Pokrivajo branje datumov, izbor živilskih letakov, mesno besedišče, pretvorbo
-urnika v `OnCalendar`, kazalo in obveščanje. Ne gredo na splet, zato tečejo v
-desetinki sekunde in v GitHub Actions ob vsakem pushu.
+Ne gredo na splet in trajajo slabih 20 sekund. Testi s pravim zajemom vseh
+trgovin so v `testi/e2e` in tečejo samo z `ARHIV_E2E=1`. GitHub Actions
+poganja oboje ob vsakem pushu, na Linuxu in na Windows.
 
 ## Zgradba
 
@@ -217,7 +217,7 @@ Kako pridemo do posamezne trgovine:
 Program bere vsebino tujih strani, zato ji ne zaupa:
 
 - **Kam sme:** vsak naslov iz tuje strani ali API-ja gre skozi
-  `jedro/naslovi.py` — samo gostitelji te trgovine, samo https na vratih 443,
+  `jedro/naslovi.py`: samo gostitelji te trgovine, samo https na vratih 443,
   brez poverilnic in nenavadnih znakov v naslovu. Enako velja za vsako
   preusmeritev. Ob neposredni povezavi `jedro/povezava.py` preveri še naslov IP,
   na katerega se je vtičnica res povezala, zato tudi dovoljeno ime, ki ga DNS
@@ -245,9 +245,9 @@ Program bere vsebino tujih strani, zato ji ne zaupa:
 Recimo, da dodajaš Jager. Prepiši `trgovine/_predloga.py` v
 `trgovine/jager.py`, razred preimenuj v `JagerStore` in mu nastavi
 `name = "jager"`, napiši `find_magazines`, razred vpiši v
-`trgovine/__init__.py` in trgovino dodaj v `nastavitve.yaml`. Uporabi
-`fetchers.http`, kjer gre, in `fetchers.browser` samo, kadar navaden HTTP
-odpove. Če trgovina objavi slike namesto PDF, namesto `file_url` nastavi
+`trgovine/__init__.py` in trgovino dodaj v `nastavitve.yaml`. Njene
+gostitelje vpiši v `DOVOLJENI` v `jedro/naslovi.py`, sicer program zahteve
+zavrne. Če trgovina objavi slike namesto PDF, namesto `file_url` nastavi
 `image_urls` in prenos jih sešije. Preveri z:
 
 ```bash

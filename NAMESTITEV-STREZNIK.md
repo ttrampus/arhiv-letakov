@@ -9,9 +9,9 @@ v [README.md](README.md).
 Enkraten opravek, ne storitev. Ob vsakem zagonu obišče strani sedmih trgovin,
 prenese kataloge, ki jih še ni v arhivu, in konča. Med zagoni ne teče nič.
 
-- **ne posluša na nobenih vratih**, dohodnega prometa ne potrebuje
-- **nima podatkovnega strežnika**: stanje je ena datoteka SQLite ob arhivu
-- **nima prijav in gesel**, razen morebitnega webhooka za obveščanje
+- ne posluša na nobenih vratih, dohodnega prometa ne potrebuje
+- nima podatkovnega strežnika: stanje je ena datoteka SQLite ob arhivu
+- nima prijav in gesel, razen morebitnega webhooka za obveščanje
 - ponovni zagon ničesar ne pokvari: kar je že v arhivu, preskoči (po URL in po
   vsebini SHA-256)
 
@@ -22,11 +22,11 @@ prenese kataloge, ki jih še ni v arhivu, in konča. Med zagoni ne teče nič.
 | OS | Windows Server (kot `.exe` pod Task Schedulerjem) ali Linux (systemd, zabojnik) |
 | Python | 3.11 ali novejši; pri `.exe` ga na strežniku ni treba |
 | CPU / RAM | 1 jedro, 1 GB |
-| Disk | okoli **10–15 GB na leto**; katalog je povprečno 21 MB, mesna kopija pride zraven |
+| Disk | okoli 10–15 GB na leto; katalog je povprečno 21 MB, mesna kopija pride zraven |
 | Čas zajema | 5–20 minut, odvisno od odzivnosti trgovin |
 | Zunanji paketi | neobvezno `tesseract` s slovenskim jezikom in `poppler`; brez njiju Lidlovi letaki obdržijo vse strani |
 
-Brskalnika **ne potrebuje**. Vseh sedem trgovin teče prek navadnega HTTPS,
+Brskalnika ne potrebuje. Vseh sedem trgovin teče prek navadnega HTTPS,
 zato v `.exe` ni ničesar zunanjega.
 
 ### Odhodni promet
@@ -42,10 +42,9 @@ www.hofer.si             letaki.hofer.si       view.publitas.com
 www.eurospin.si          digitalflyer.eurospin.it
 ```
 
-Ta seznam ni le dokumentacija: **program sam ne sme nikamor drugam**. Kar ni na
-seznamu, zavrne, preden zahtevo pošlje, in prav tako zavrne vsako preusmeritev,
-ki bi ga s teh gostiteljev odpeljala drugam. Zato ga izpiše tudi program sam,
-da ga ni treba prepisovati:
+Drugam program tudi sam ne gre. Zahtevo na gostitelja, ki ga ni na seznamu,
+zavrne, preden jo pošlje, enako tudi preusmeritev nanj. Seznam izpiše tudi
+program:
 
 ```
 arhiv-letakov.exe gostitelji           # za požarni zid
@@ -53,7 +52,7 @@ arhiv-letakov.exe gostitelji --json    # za avtomatiko
 ```
 
 Ko trgovina preseli datoteke na nov naslov, ga dodaj v nastavitve
-(`omrezje.dovoljeni_gostitelji`) — nove izdaje programa za to ni treba.
+(`omrezje.dovoljeni_gostitelji`); nove izdaje programa za to ni treba.
 
 Za namestitev še PyPI (`pypi.org`, `files.pythonhosted.org`) in paketni viri
 distribucije; pri `.exe` tudi tega ne, ker se gradi drugje.
@@ -62,18 +61,18 @@ distribucije; pri `.exe` tudi tega ne, ker se gradi drugje.
 
 Posrednik vpiši v nastavitve (`omrezje.posrednik`) ali v spremenljivko
 `HTTPS_PROXY`; vpis v nastavitvah ima prednost. Samodejne nastavitve (PAC,
-WPAD) in nastavitve iz brskalnika **ne veljajo** — servisni račun jih nima.
+WPAD) in nastavitve iz brskalnika ne veljajo, ker jih servisni račun nima.
 
 - **Prijava na posrednik:** program zna samo osnovno prijavo
-  (`http://uporabnik:geslo@proxy:8080`), **ne pa NTLM ali Kerberos**. Če
+  (`http://uporabnik:geslo@proxy:8080`), ne pa NTLM ali Kerberos. Če
   posrednik zahteva prijavo Windows, naj strežniku za gostitelje s seznama
   zgoraj dovoli prehod brez prijave. Program v tem primeru jasno javi
   `posrednik zahteva prijavo (407)`.
 - **Prestrezanje TLS:** program zaupa shrambi certifikatov Windows (prek
   paketa `truststore`), zato certifikat CA podjetja, razdeljen s skupinskim
   pravilnikom, deluje brez dodatnih nastavitev.
-- Poverilnice posrednika so v dnevniku zamaskirane — zapiše se samo gostitelj
-  in vrata.
+- V dnevnik se od posrednika zapišeta samo gostitelj in vrata, brez
+  uporabnika in gesla.
 
 ## Pot A: Windows strežnik (priporočeno v okolju Active Directory)
 
@@ -83,7 +82,7 @@ opravilo v Task Schedulerju. Ni storitve, ni vrat, ni Pythona na strežniku.
 Namenoma mapa in ne en sam `.exe`: enodatotečni program se ob vsakem zagonu
 razpakira v `%TEMP%` in od tam nalaga DLL, kar AppLocker/WDAC na utrjenih
 strežnikih blokira, protivirusni programi pa takšne `.exe` radi označijo. Če
-ima podjetje certifikat za podpisovanje kode, podpišite `arhiv-letakov.exe`.
+ima podjetje certifikat za podpisovanje kode, podpiši `arhiv-letakov.exe`.
 
 ### 1. Program
 
@@ -103,7 +102,7 @@ Datoteke, prenesene iz interneta, pred namestitvijo odblokiraj:
 
 ### 2. Priprava v AD (enkrat, skrbnik domene)
 
-Priporočeno je **gMSA** — geslo upravlja AD, nikjer ga ni treba hraniti:
+Priporočen je gMSA, ker geslo upravlja AD in ga ni treba nikjer hraniti:
 
 ```powershell
 New-ADServiceAccount -Name svc-letaki -DNSHostName svc-letaki.domena.local `
@@ -145,14 +144,14 @@ Skripta:
 | `\\dms01\letaki\arhiv\`, `\\dms01\letaki\arhiv-meso\` | letaki za dokumentarni sistem |
 | opravilo `\arhiv-letakov\arhiv-letakov` | zajem po urniku |
 
-Mapa `%ProgramData%\arhiv-letakov` dobi **zaščitene pravice brez dedovanja**
+Mapa `%ProgramData%\arhiv-letakov` dobi zaščitene pravice brez dedovanja
 (SYSTEM, skrbniki, servisni račun). Privzete pravice na `ProgramData` namreč
-dovolijo vsakemu uporabniku ustvarjati datoteke — kdor bi pred namestitvijo
+dovolijo vsakemu uporabniku ustvarjati datoteke, in kdor bi pred namestitvijo
 podtaknil `nastavitve.yaml`, bi lahko pod servisnim računom zagnal svoj ukaz.
 Skripta zato zavrne obstoječe datoteke, ki jih ni ustvaril skrbnik, SYSTEM ali
 servisni račun, in spoje ali simbolne povezave v tej mapi.
 
-Nastavitve (`nastavitve.yaml`) servisni račun **samo bere**; spreminjati jih
+Nastavitve (`nastavitve.yaml`) servisni račun samo bere; spreminjati jih
 smejo samo skrbniki. Mapo programa skripta pred namestitvijo v celoti
 zamenja, zato mora `-Mapa` (če ga podaš) končati z `arhiv-letakov`.
 
@@ -161,12 +160,12 @@ prednost (ne izriva drugih procesov strežnika) in dva ponovna poskusa po 15
 minut ob napaki. Obdelava vsakega PDF ima poleg tega svojo mejo pomnilnika
 (Job Object, privzeto 2 GB) in trdi rok.
 
-`-ZazeniZdaj` opravilo takoj zažene **pod servisnim računom** in pokaže izid.
+`-ZazeniZdaj` opravilo takoj zažene pod servisnim računom in pokaže izid.
 To je edini pravi preizkus, da račun pride do spleta in do delnice.
 
 ### 4. Prijava na dokumentarni sistem
 
-Kode za LDAP ali Kerberos v programu **ni in je ne rabi**. Opravilo teče pod
+Program nima kode za LDAP ali Kerberos in je ne potrebuje. Opravilo teče pod
 domenskim računom, Windows ob dostopu do `\\dms01\...` sam opravi Kerberos in
 program samo piše datoteke. Zato tudi ni gesel, ki bi jih bilo treba hraniti.
 
@@ -174,15 +173,14 @@ Poti morajo biti UNC (`\\streznik\delnica\...`): zamenjanih pogonov (`Z:`)
 servisni račun ne vidi; program ob zagonu na to opozori. Baza in dnevniki
 namenoma ostanejo lokalno, ker se SQLite čez SMB ne zaklepa zanesljivo.
 
-**Za dokumentarni sistem:** letak se najprej piše kot `ime.pdf.part` in se
+Za dokumentarni sistem: letak se najprej piše kot `ime.pdf.part` in se
 preimenuje v `ime.pdf` šele, ko je v celoti prenesen in preverjen. Datoteka
 `.pdf` se na delnici torej nikoli ne pojavi napol zapisana. Dokumentarni
 sistem naj prezre `*.part` in datoteke, ki se začnejo s piko (program z njimi
 ob zagonu preveri, ali sme pisati).
 
 Pred vsakim zajemom program preveri, da lahko piše na delnico. Če ne more,
-takoj konča z napako (Task Scheduler pokaže `0x1`) in pošlje obvestilo —
-nedosegljiva delnica ne more ostati neopažena.
+takoj konča z napako (Task Scheduler pokaže `0x1`) in pošlje obvestilo.
 
 ### 5. Preverjanje
 
@@ -235,8 +233,7 @@ Možnosti: `--mapa`, `--uporabnik`, `--brez-paketov` (pakete namesti sam),
 `--brez-casovnika` (samo namesti, ne vklopi).
 
 Pozna `apt`, `dnf`, `zypper` in `pacman`. Kjer systemd ni (starejši strežniki,
-zabojniki, chroot), urnik zapiše v `/etc/cron.d/arhiv-letakov` — enak čas, samo
-drug zapis.
+zabojniki, chroot), urnik zapiše v `/etc/cron.d/arhiv-letakov`.
 
 ## Pot C: Docker
 
@@ -245,10 +242,10 @@ docker build -t arhiv-letakov:latest .
 docker compose run --rm letaki prenesi
 ```
 
-Slika je okoli 600 MB (tesseract in odvisnosti; Chromiuma ni). Kjer je namesto Dockerja
+Slika je okoli 600 MB (tesseract in odvisnosti). Kjer je namesto Dockerja
 Podman, delujeta ista slika in datoteka: `podman build` in `podman-compose`.
 
-Zabojnik naredi en zajem in konča. Ponavljanje prevzame gostitelj — v
+Zabojnik naredi en zajem in konča. Ponavljanje prevzame gostitelj; v
 `streznik/` sta pripravljena `docker-arhiv-letakov.service` in `.timer`:
 
 ```bash
@@ -274,7 +271,7 @@ PVC 100 GB. Slika mora biti v registru gruče.
 ## Pot E: brez root pravic
 
 Če administrator računa s pravicami ne da, program teče tudi povsem v domači
-mapi uporabnika — tako ga poganja avtor:
+mapi uporabnika, tako kot ga poganja avtor:
 
 ```bash
 ./namesti.sh                 # vpraša za mape, trgovine in uro
@@ -291,27 +288,24 @@ uporabnikovem `crontab -e`:
 
 ## Česa program ne zna
 
-Da ne bo presenečenj pri uvajanju:
+- Brez odhodnega dostopa do strani trgovin ne dela, zato omrežja brez
+  interneta ne pridejo v poštev.
+- Ni storitev in nima spletnega vmesnika ali API-ja. Arhiv so datoteke v mapah.
+- Prijave NTLM ali Kerberos na posredniku ne zna (glej zgoraj).
+- Preklica certifikatov (CRL/OCSP) ne preverja, ker bi za to potreboval dostop
+  do strežnikov CRL/OCSP vseh izdajateljev, teh pa ni na seznamu za požarni
+  zid. Ostalo preverjanje TLS (veljavnost, ime, veriga) je vklopljeno.
+- Ko trgovina prenovi stran, je treba popraviti njeno datoteko v `trgovine/`.
 
-- **Air-gapped omrežja ne pridejo v poštev.** Program mora do strani trgovin;
-  brez odhodnega dostopa nima kaj prenašati. To je tudi edina zahteva, ki je
-  ni mogoče obiti.
-- **Ni storitev.** Ne posluša na nobenih vratih in med zagoni ne teče nič; kdor
-  pričakuje strežniški proces, ga ne bo našel.
-- **Ni spletnega vmesnika in ne API-ja.** Arhiv so datoteke v mapah; kdor hoče
-  vmesnik, jih postreže z lastnim.
-- **Veljavnost zajemalnikov ni zagotovljena.** Trgovina lahko kadar koli
-  prenovi stran; takrat je treba popraviti datoteko v `trgovine/`. Prav zato
-  program javi, ko trgovina več zagonov zapored ne vrne ničesar.
+## Pogoste spremembe nastavitev
 
-## Kar bo podjetje najbrž spremenilo
-
-V `/etc/arhiv-letakov/nastavitve.yaml`:
+V `nastavitve.yaml` (Windows: `%ProgramData%\arhiv-letakov\`, Linux:
+`/etc/arhiv-letakov/`):
 
 ```yaml
 urnik: cet 06:00          # dnevno HH:MM | tedensko HH:MM | pon,cet 06:15 | ročno
 trgovine:
-  lidl: {vklopljeno: false}   # trgovina, ki je ne spremljajo
+  lidl: {vklopljeno: false}   # izklop posamezne trgovine
 
 obvescanje:
   po_neuspehih: 3         # po treh praznih zagonih javi
@@ -319,17 +313,19 @@ obvescanje:
   ukaz: "mail -s 'arhiv-letakov' it@podjetje.si"    # ali karkoli bere s stdin
 
 mesne_strani:
-  vklopljeno: false       # če kopije samo z mesnimi stranmi ne rabijo
+  vklopljeno: false       # brez kopij samo z mesnimi stranmi
 ```
 
-Po spremembi urnika pri poti A poženi `sudo ./namesti-streznik.sh` znova ali
-popravi `OnCalendar` v `/etc/systemd/system/arhiv-letakov.timer`.
+Po spremembi urnika na Windows znova poženi `namesti-windows.ps1` z istimi
+parametri. Na Linuxu časovnik urnika iz nastavitev ne bere, zato poženi
+`sudo ./namesti-streznik.sh --urnik "dnevno 06:00"` ali popravi `OnCalendar` v
+`/etc/systemd/system/arhiv-letakov.timer`.
 
-**Tedensko ali dnevno?** Privzeto je četrtek, ko izide največ letakov, a
-trgovine ne objavljajo vse istega dne. Zagon, ki ne najde nič novega, traja
-nekaj sekund in ne prenese ničesar — naslove, ki so že v bazi, preskoči brez
-zahteve. Zato je `dnevno 06:00` skoraj zastonj in ne zgreši letaka, ki izide in
-poteče med dvema četrtkoma.
+Privzeto je četrtek, ko izide največ letakov, a trgovine ne objavljajo vse
+istega dne. Zagon, ki ne najde nič novega, traja nekaj sekund in ne prenese
+ničesar, ker naslove, ki so že v bazi, preskoči brez zahteve. Zato je
+`dnevno 06:00` skoraj zastonj in ne zgreši letaka, ki izide in poteče med
+dvema četrtkoma.
 
 ## Nadzor
 
@@ -338,13 +334,13 @@ letaki stanje --json
 ```
 
 Izpiše število katalogov, čas zadnjega prenosa in trgovine, pri katerih zajem
-ne dela. **Izhodna koda 0 pomeni v redu, 1 pomeni pokvarjen zajem** — dovolj za
+ne dela. Izhodna koda 0 pomeni v redu, 1 pa pokvarjen zajem, kar zadošča za
 Nagios ali Zabbix. V zabojniku je to `docker compose run --rm letaki stanje`.
 
-Prava skrb pri tem programu ni, da bi se sesul, ampak da trgovina prenovi
-stran in zajemalnik tiho neha najdevati letake. Zato program šteje zaporedne
-prazne zagone po trgovinah in po `po_neuspehih` javi na webhook ali ukaz. Isto
-vidiš v `stanje` in v `./letaki` brez ukaza.
+Najpogostejša težava je, da trgovina prenovi stran in zajemalnik neha najti
+letake. Zato program šteje zaporedne prazne zagone po trgovinah in po
+`po_neuspehih` javi na webhook ali ukaz. Isto vidiš v `stanje` in v `./letaki`
+brez ukaza.
 
 Dva zagona se ne moreta prekrivati: tekoči drži datoteko `arhiv.db.lock`, novi
 se umakne in konča z 0.
@@ -353,8 +349,10 @@ se umakne in konča z 0.
 
 Dovolj sta dve stvari:
 
-- `/var/lib/arhiv-letakov/` — arhiv, mesne kopije in `arhiv.db`
+- `/var/lib/arhiv-letakov/` (arhiv, mesne kopije in `arhiv.db`)
 - `/etc/arhiv-letakov/nastavitve.yaml`
+
+Na Windows sta to `%ProgramData%\arhiv-letakov\` in delnica z letaki.
 
 Kopiraj `arhiv.db`, ko zajem ne teče, ali z `sqlite3 arhiv.db ".backup kopija.db"`.
 Če se baza izgubi, arhiv ostane, program pa bo letake prenesel znova, ker o njih
@@ -364,17 +362,14 @@ ne ve več nič.
 
 ```bash
 cd arhiv-letakov && git pull
-sudo ./namesti-streznik.sh          # nastavitev in arhiva ne povozi
+sudo ./namesti-streznik.sh --urnik "cet 06:00"   # isti urnik kot ob namestitvi
 ```
 
-Trgovine občasno prenovijo strani in takrat je treba popraviti zajemalnik v
-`trgovine/`. Prav zato je obveščanje ob praznih zagonih vklopljeno privzeto —
-brez njega arhiv tiho zastane.
+Nastavitev in arhiva skripta ne povozi. Na Windows prenesi nov program in znova
+poženi `namesti-windows.ps1` z istimi parametri; zamenja mapo programa,
+nastavitve in podatki ostanejo.
 
-## Vzdrževanje: kaj je res mesečno delo
-
-Program sam po sebi ne potrebuje nege — nima baze, ki bi rasla, ne posodablja
-se in med zagoni ne teče. Delo prinese samo zunanji svet, in to v treh oblikah:
+## Vzdrževanje
 
 | Kaj | Kako pogosto | Koliko dela |
 |---|---|---|
@@ -382,11 +377,6 @@ se in med zagoni ne teče. Delo prinese samo zunanji svet, in to v treh oblikah:
 | Disk se polni (10–15 GB na leto) | preveri ob četrtletju | nič, dokler je prostor |
 | Posodobitev odvisnosti (`requests`, `pypdf` …) | dvakrat letno ali ob CVE | nova gradnja `.exe` in prenos na strežnik |
 | Preverjanje, da zajem sploh teče | samodejno | nič, če je obveščanje vklopljeno |
-
-**Prvi vrstici se ni mogoče izogniti** — zajemalnik je odvisen od tuje strani.
-Zato program šteje zaporedne prazne zagone po trgovinah in po `po_neuspehih`
-javi na webhook ali ukaz. Brez tega arhiv tiho zastane in se to opazi mesece
-pozneje.
 
 Najlažji primer prenove: trgovina preseli datoteke na nov gostitelj. Takrat je
 popravek ena vrstica v `nastavitve.yaml`:
@@ -398,47 +388,24 @@ omrezje:
 ```
 
 Težji primer: stran spremeni strukturo HTML. Takrat je treba popraviti izbirnike
-v `trgovine/<trgovina>.py`. Testa `testi/test_trgovine_brez_brskalnika.py`
-tečeta na shranjenih vzorcih strani in pokažeta, kaj se je spremenilo.
+v `trgovine/<trgovina>.py`. Kaj trgovina vrne, pokaže
+`letaki -p prenesi --trgovina <ime> --poskusno`.
 
-Realna ocena za podjetje: **nekaj ur na leto, ne nekaj ur na mesec** — pod
-pogojem, da je obveščanje vklopljeno in da nekdo prevzame popravke zajemalnikov.
+## Testi
 
-## Kako je bilo preverjeno
+```bash
+python -m pytest testi                          # brez spleta, slabih 20 sekund
+ARHIV_E2E=1 python -m pytest testi/e2e          # pravi zajem vseh sedmih trgovin
+```
 
-Za pregled pred predajo — kaj je preizkušeno in kako to ponoviš:
+```powershell
+Invoke-Pester testi/namesti-windows.Tests.ps1   # namestitvena skripta
+```
 
-| Kaj | Kako | Kje ponoviš |
-|---|---|---|
-| Enotni in integracijski testi (≈170) | pytest, na Linuxu in na Windows Python 3.12 | `python -m pytest testi` |
-| Namestitvena skripta (25 testov) | Pester 5, z nadomeščenim Task Schedulerjem in ACL; v CI v Windows PowerShell 5.1 s pravim `.exe` | `Invoke-Pester testi/namesti-windows.Tests.ps1` |
-| **E2E: celoten program** (16 scenarijev) | pravi zajem vseh 7 trgovin kot zunanji proces; vsak PDF (SHA-256, strani), mesne kopije, ponovni zagon brez podvajanja, zaklep, pravi posrednik (brez prijave, Basic, 407), požarni zid brez enega gostitelja, nedosegljiv arhiv z obvestilom, meja velikosti; na izvorni kodi in na zgrajenem `.exe` | `ARHIV_E2E=1 python -m pytest testi/e2e` |
-| **E2E: Windows strežnik** | prava namestitev, lokalni servisni račun s "Log on as a batch job", prava delnica SMB (`\\localhost`), opravilo pod servisnim računom, pravice ACL, napadi (podtaknjene nastavitve, spreminjanje nastavitev, zamenjava programa), izguba dostopa do delnice, odstranitev | CI (`e2e-windows`) ali `testi\e2e\windows-streznik.ps1` na **testnem** stroju |
-| Da testi res nekaj preverjajo | vsaka varnostna zaščita posebej izklopljena → testi so padli | ročno |
-| SSRF prek razlik v razčlenjevanju URL | > 1,5 milijona mutiranih naslovov proti `urllib3` in `requests`, 0 razhajanj | `testi/test_fuzz.py` (30 000 v CI) |
-| TLS | badssl.com: potekel, napačen gostitelj, samopodpisan, SHA-1, RC4, DH480, NULL → vse zavrnjeno | ročno |
-| Pokvarjeni PDF | 500 mutiranih letakov skozi izolirano obdelavo: 0 zataknjenj, 0 nepričakovanih napak, 0 ostankov | ročno |
-| ReDoS | vsi regularni izrazi na 2 MB napadalnih vhodih; dva popravljena | `testi/test_fuzz.py` |
-| Znane ranljivosti odvisnosti | `pip-audit` (izvajanje in zaklenjena gradnja): 0 | CI |
-| Statična analiza | `bandit`, PSScriptAnalyzer (združljivost s PowerShell 5.1, Server 2016/2019) | CI |
-
-Windows del je bil pred predajo preizkušen v Wine (Windows Python 3.12 in
-zgrajeni `.exe`): zaklep med procesi, nedosegljiva delnica UNC, izolirana
-obdelava PDF v zapakiranem programu, uboj visečega `pdftoppm` prek Job Object.
-Meje pomnilnika v Job Object Wine ne izvaja; ta test teče v CI na pravem
-Windows (posel `windows`). **Na njihovem strežniku z AD in delnico pa pravi
-dokaz da šele `namesti-windows.ps1 -ZazeniZdaj`.**
-
-Znane omejitve:
-
-- Preklica certifikatov (CRL/OCSP) program ne preverja, ne na Linuxu ne na
-  Windows. Vklop bi zahteval odhodni dostop do strežnikov CRL/OCSP vseh
-  izdajateljev, ki niso na seznamu za požarni zid, in bi zajem za strogim
-  požarnim zidom ustavil. Tveganje je majhno: napadalec bi potreboval ukraden
-  (in preklican) certifikat trgovine *in* položaj v omrežju med strežnikom in
-  trgovino; vse ostalo preverjanje TLS (veljavnost, ime, veriga) je vklopljeno.
-- Prijava NTLM/Kerberos na posredniku ni podprta (glej zgoraj).
-- Trgovina lahko prenovi stran; takrat je treba popraviti zajemalnik.
+GitHub Actions jih poganja ob vsakem pushu, na Linuxu in na Windows. Na
+Windows zgradi še `.exe` in ga s `testi/e2e/windows-streznik.ps1` namesti s
+servisnim računom in delnico SMB, tako kot na strežniku. Odvisnosti preveri s
+`pip-audit`, kodo pa z `bandit`.
 
 ## Ko kaj ne dela
 
@@ -449,8 +416,8 @@ Znane omejitve:
 | `prenos je presegel N MB` | letak je res večji od meje ali pa odgovor ni letak; preveri in po potrebi dvigni `meje.najvecji_pdf_mb` |
 | opravilo se ne zažene (`0x80070569`) | servisni račun nima `Log on as a batch job` |
 | opravilo se konča z `0x1`, v dnevniku `ni mogoče pisati` | servisni račun nima Modify na delnici ali delnica ni dosegljiva |
-| `posrednik zahteva prijavo (407)` | posrednik hoče prijavo NTLM/Kerberos; strežniku dovolite prehod brez nje |
-| `CERTIFICATE_VERIFY_FAILED` | CA posrednika ni v shrambi Windows; uvozite jo v `Trusted Root` računalnika |
+| `posrednik zahteva prijavo (407)` | posrednik hoče prijavo NTLM/Kerberos; dovoli strežniku prehod brez nje |
+| `CERTIFICATE_VERIFY_FAILED` | CA posrednika ni v shrambi Windows; uvozi jo v `Trusted Root` računalnika |
 | občasno `403` pri eni trgovini (npr. Spar) | zaščita pred roboti (Cloudflare) je zavrnila posamezen zagon; naslednji zagon letake pobere, obvestilo pride šele po treh zaporednih neuspehih |
 | `mesne kopije ne delam: ... prekinjena` | PDF je obdelavo zataknil; izvirnik je shranjen, manjka le mesna kopija |
 | Lidlovi letaki obdržijo vse strani | manjka `tesseract-ocr-slv` |
@@ -460,7 +427,7 @@ Znane omejitve:
 ## Pravno
 
 Program prenaša javno objavljene letake s spletnih strani trgovin. Preden ga
-podjetje postavi v redno rabo, naj pogleda pogoje uporabe posamezne trgovine —
+podjetje postavi v redno rabo, naj pogleda pogoje uporabe posamezne trgovine,
 zlasti če bi kataloge objavljalo naprej ali iz njih delalo izdelke. Zajem je
 namenoma počasen (2 sekundi med zahtevami) in se predstavi z navadnim
 uporabniškim nizom brskalnika.
