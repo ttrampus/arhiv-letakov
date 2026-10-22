@@ -1,15 +1,18 @@
 """Hofer in Eurospin sta prepisana na navaden HTTP; tu to preverimo brez omrežja.
 
-Vzorca v testi/vzorci sta odrezka resničnih strani iz septembra 2026. Ko
-trgovina prenovi stran, ta testa padeta prva - to je namen.
+Vzorci v testi/vzorci so odrezki resničnih strani (Hofer iz septembra 2026,
+Mercator iz oktobra 2026). Ko trgovina prenovi stran, ti testi padejo prvi -
+to je namen.
 """
 
 import json
 import unittest
 from pathlib import Path
 
+from jedro.naslovi import je_dovoljen
 from trgovine.eurospin import EurospinStore
 from trgovine.hofer import HoferStore
+from trgovine.mercator import MercatorStore
 
 VZORCI = Path(__file__).parent / "vzorci"
 
@@ -79,6 +82,38 @@ class Hofer(unittest.TestCase):
     def test_prvi_letak_ima_datum(self):
         magazines = HoferStore().find_magazines(self.fetchers)
         self.assertTrue(any(m.date_from for m in magazines))
+
+
+class Mercator(unittest.TestCase):
+    def setUp(self):
+        self.fetchers = LazniFetchers({
+            "mercator.si/katalogi": (VZORCI / "mercator-seznam.html").read_text(
+                encoding="utf-8"),
+        })
+
+    def test_pdf_iz_ipaper_predogleda(self):
+        magazines = MercatorStore().find_magazines(self.fetchers)
+        self.assertEqual(len(magazines), 5)
+        redni = next(m for m in magazines if m.title.startswith("Redni katalog"))
+        self.assertEqual(
+            redni.file_url,
+            "https://katalogi.mercator.si/mercator/mercator-si/redni-katalog/"
+            "redni-katalog-22-10-do-28-10-2026/GetPDF.ashx")
+        self.assertEqual(
+            redni.source_url,
+            "https://www.mercator.si/katalogi/redni-katalog-22-10-do-28-10-2026/")
+        self.assertEqual((str(redni.date_from), str(redni.date_to)),
+                         ("2026-10-22", "2026-10-28"))
+
+    def test_preusmeritev_na_ipaper_je_dovoljena(self):
+        self.assertTrue(je_dovoljen(
+            "https://cdn.ipaper.io/iPaper/Papers/x/Download.pdf", "mercator"))
+
+    def test_tuj_predogled_preskoci(self):
+        html = ('<ul><li class="catalog-item"><img class="catalog-img-ipaper" '
+                'src="https://zlo.si/mercator/x/Image.ashx"></li></ul>')
+        fetchers = LazniFetchers({"mercator.si/katalogi": html})
+        self.assertEqual(MercatorStore().find_magazines(fetchers), [])
 
 
 class Eurospin(unittest.TestCase):

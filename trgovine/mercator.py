@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from jedro.datumi import parse_range
 from jedro.povezava import Fetchers
 from jedro.modeli import Magazine
 
 from .osnova import BaseStore, clean, nearest_text
+
+# Od oktobra 2026 stran nima več povezav na PDF, le predogled iz iPaperja.
+# Iz poti predogleda sestavimo GetPDF.ashx na katalogi.mercator.si, ki preusmeri
+# na cdn.ipaper.io (enako kot Sparov getPdf.ashx).
+_IPAPER = "viewer.ipaper.io"
+_PDF = "https://katalogi.mercator.si{}/GetPDF.ashx"
 
 
 class MercatorStore(BaseStore):
@@ -18,7 +26,14 @@ class MercatorStore(BaseStore):
 
         for item in soup.select("li.catalog-item"):
             pdf_link = item.select_one('a[href$=".pdf"]')
-            if not pdf_link:
+            preview = item.select_one("img.catalog-img-ipaper")
+            if pdf_link:
+                file_url = self.absolute(pdf_link["href"], fetchers)
+            elif preview:
+                file_url = self._ipaper_pdf(preview.get("src", ""), fetchers)
+            else:
+                continue
+            if not file_url:
                 continue
 
             title_link = item.select_one("a.title-link") or item.select_one("h4 a, h4")
@@ -26,16 +41,23 @@ class MercatorStore(BaseStore):
 
             validity = item.select_one("p.small")
             date_from, date_to = parse_range(
-                clean(validity.get_text()) if validity else nearest_text(pdf_link))
+                clean(validity.get_text()) if validity else nearest_text(pdf_link or preview))
             if not date_from:
                 date_from, date_to = parse_range(title)
 
             detail = item.select_one('a[href^="/katalogi/"]')
             magazines.append(self.magazine(
                 title,
-                file_url=self.absolute(pdf_link["href"], fetchers),
+                file_url=file_url,
                 source_url=self.absolute(detail["href"], fetchers) if detail else self.listing_url,
                 date_from=date_from,
                 date_to=date_to))
 
         return magazines
+
+    def _ipaper_pdf(self, src: str, fetchers: Fetchers) -> str:
+        parts = urlsplit(src)
+        path, _, page = parts.path.rpartition("/")
+        if parts.hostname != _IPAPER or page.lower() != "image.ashx" or not path:
+            return ""
+        return self.absolute(_PDF.format(path), fetchers)

@@ -34,9 +34,9 @@ zato v `.exe` ni ničesar zunanjega.
 Samo HTTPS (443) na te gostitelje:
 
 ```
-www.mercator.si          www.tus.si            www.spar.si
-letak.spar.si            cdn.ipaper.io         www.e-leclerc.si
-www.lidl.si
+www.mercator.si          katalogi.mercator.si  www.tus.si
+www.spar.si              letak.spar.si         cdn.ipaper.io
+www.e-leclerc.si         www.lidl.si
 endpoints.leaflets.schwarz   assets.leaflets.schwarz
 www.hofer.si             letaki.hofer.si       view.publitas.com
 www.eurospin.si          digitalflyer.eurospin.it

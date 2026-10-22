@@ -206,7 +206,8 @@ Kako pridemo do posamezne trgovine:
 
 | Trgovina | Način |
 |---|---|
-| Mercator, Tuš, E.Leclerc | navaden HTTP, neposredne povezave na PDF |
+| Tuš, E.Leclerc | navaden HTTP, neposredne povezave na PDF |
+| Mercator | navaden HTTP; katalogi so v iPaperju, PDF da `GetPDF.ashx` na `katalogi.mercator.si` |
 | Spar | navaden HTTP, a stran zahteva glave brskalnika |
 | Lidl | JSON API `endpoints.leaflets.schwarz/v4/flyer` |
 | Hofer | Akamai zavrne brskalniški User-Agent, zato odkrit agent; PDF stoji pri Publitas in ga poberemo iz HTML |

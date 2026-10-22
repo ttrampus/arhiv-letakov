@@ -13,7 +13,7 @@ from urllib.parse import urlsplit, urlunsplit
 # Pika spredaj pomeni tudi poddomene; samo za lastne domene trgovin. Skupne
 # domene (iPaper, Publitas) so naštete natančno, sicer bi dovolili vse njihove stranke.
 DOVOLJENI: dict[str, tuple[str, ...]] = {
-    "mercator": ("mercator.si", ".mercator.si"),
+    "mercator": ("mercator.si", ".mercator.si", "cdn.ipaper.io"),  # GetPDF.ashx preusmeri na iPaper
     "tus": ("tus.si", ".tus.si"),
     "spar": ("spar.si", ".spar.si", "cdn.ipaper.io"),  # getPdf.ashx preusmeri na iPaper
     "leclerc": ("e-leclerc.si", ".e-leclerc.si"),
@@ -25,7 +25,7 @@ DOVOLJENI: dict[str, tuple[str, ...]] = {
 
 # Kar program dejansko obišče; za požarne zidove, ki ne znajo imen z *.
 ZA_POZARNI_ZID: tuple[str, ...] = (
-    "www.mercator.si",
+    "www.mercator.si", "katalogi.mercator.si",
     "www.tus.si",
     "www.spar.si", "letak.spar.si", "cdn.ipaper.io",
     "www.e-leclerc.si",
